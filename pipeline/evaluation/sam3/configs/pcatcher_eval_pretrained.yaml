@@ -341,10 +341,10 @@ trainer:
     wandb_writer:
       _target_: sam3.train.utils.logger.make_wandb_logger
       project: pcatcher
-      entity: gpunewbie
+      entity: null
       experiment_log_dir: ${launcher.experiment_log_dir}
       job_type: ${roboflow_train.supercategory}
-      should_log: true
+      should_log: false
     log_dir: ${launcher.experiment_log_dir}/logs/${roboflow_train.supercategory}
     log_freq: 10
 launcher:

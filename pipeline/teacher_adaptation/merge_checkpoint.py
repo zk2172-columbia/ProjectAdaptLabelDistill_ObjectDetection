@@ -16,10 +16,8 @@ Outputs
         {"model": merged_state_dict} — the format config.yaml's
         sam3.checkpoint_path expects.
 
-Once the merge succeeds, the raw trainer checkpoint (<experiment_dir>/checkpoints/
-checkpoint.pt) is deleted — it's ~3x the size of the merged checkpoint (model weights
-plus optimizer/scaler/step state) and is only useful for resuming interrupted training,
-which the later stages never do. Set output.keep_raw_checkpoint: true in the config to keep it.
+The raw trainer checkpoint is always preserved. Cleanup is an explicit operation outside
+this pipeline so failed validation cannot destroy the only resumable training state.
 
 Usage
 -----
@@ -29,6 +27,10 @@ Usage
 from __future__ import annotations
 
 import argparse
+import json
+import hashlib
+import os
+import tempfile
 import sys
 from pathlib import Path
 
@@ -69,23 +71,44 @@ def main() -> None:
     ft_ckpt = torch.load(ft_checkpoint_path, map_location="cpu")
     ft_state = ft_ckpt["model"] if "model" in ft_ckpt else ft_ckpt
 
-    merged, replaced, skipped = merge_checkpoint_state(hf_state, ft_state)
+    merged, replaced, skipped = merge_checkpoint_state(
+        hf_state, ft_state, allowed_skipped=cfg.get("output", {}).get("allowed_skipped_keys", []))
     print(f"[merge_checkpoint] replaced keys: {replaced}")
     print(f"[merge_checkpoint] skipped keys:  {len(skipped)}")
 
     merged_path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"model": merged}, merged_path)
+    if merged_path.exists():
+        raise FileExistsError(f"Refusing to overwrite checkpoint: {merged_path}")
+    fd, temporary = tempfile.mkstemp(dir=merged_path.parent, suffix=".pt")
+    os.close(fd)
+    try:
+        torch.save({"model": merged}, temporary)
+        restored = torch.load(temporary, map_location="cpu", weights_only=True)["model"]
+        if set(restored) != set(merged) or any(
+            not torch.equal(restored[k], merged[k]) for k in merged
+        ):
+            raise RuntimeError("Merged checkpoint failed readback verification")
+        os.replace(temporary, merged_path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+    def sha256(path):
+        h = hashlib.sha256()
+        with open(path, "rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    merged_path.with_suffix(".merge.json").write_text(json.dumps({
+        "base_sha256": sha256(hf_path), "finetuned_sha256": sha256(ft_checkpoint_path),
+        "merged_sha256": sha256(merged_path), "replaced": replaced, "skipped": skipped,
+        "readback_verified": True,
+    }, indent=2))
     print(f"[merge_checkpoint] wrote merged checkpoint: {merged_path}")
     print(
         "[merge_checkpoint] next: paste this path into config.yaml's "
         "sam3.checkpoint_path"
     )
 
-    if cfg.get("output", {}).get("keep_raw_checkpoint", False):
-        print(f"[merge_checkpoint] keeping raw trainer checkpoint (output.keep_raw_checkpoint: true): {ft_checkpoint_path}")
-    else:
-        ft_checkpoint_path.unlink()
-        print(f"[merge_checkpoint] deleted raw trainer checkpoint (output.keep_raw_checkpoint: false): {ft_checkpoint_path}")
+    print(f"[merge_checkpoint] preserved raw trainer checkpoint: {ft_checkpoint_path}")
 
 
 if __name__ == "__main__":

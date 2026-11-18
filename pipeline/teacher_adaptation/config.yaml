@@ -68,8 +68,8 @@ sam3:
 #     scratch.train_batch_size: 4
 overrides:
   trainer.logging.wandb_writer.project: "pcatcher"
-  trainer.logging.wandb_writer.entity: "gpunewbie"
-  trainer.logging.wandb_writer.should_log: true
+  trainer.logging.wandb_writer.entity: null
+  trainer.logging.wandb_writer.should_log: false
 
   # The SAM3 template ships path placeholders; these two must be overridden or this stage fails at
   # load. Relative to this config file's directory — utils.PATH_OVERRIDE_KEYS makes them absolute
@@ -97,4 +97,4 @@ output:
   # merge_checkpoint.py finishes. It holds the optimizer/scaler/step state needed only
   # to resume interrupted training, and runs ~3x larger than merged_checkpoint.pt (the
   # only file the later stages actually read). Set to true if you expect to resume this run.
-  keep_raw_checkpoint: false
+  keep_raw_checkpoint: true

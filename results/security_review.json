@@ -1,0 +1,46 @@
+{
+  "date": "2026-11-18",
+  "tool": "pip-audit 2.10.1",
+  "environment": "verified-cpu.lock.txt",
+  "queried_dependencies": 98,
+  "vulnerabilities": [],
+  "skipped": [
+    {
+      "name": "sam3",
+      "reason": "distribution marked as editable"
+    },
+    {
+      "name": "torch",
+      "reason": "Dependency not found on PyPI and could not be audited: torch (2.13.0+cpu)"
+    },
+    {
+      "name": "torchvision",
+      "reason": "Dependency not found on PyPI and could not be audited: torchvision (0.28.0+cpu)"
+    }
+  ],
+  "normalized_cpu_version_followup": [
+    {
+      "name": "torch",
+      "version": "2.13.0",
+      "vulns": []
+    },
+    {
+      "name": "torchvision",
+      "version": "0.28.0",
+      "vulns": []
+    }
+  ],
+  "limitations": [
+    "Advisory coverage is time-bounded, not proof of no vulnerabilities.",
+    "Editable SAM3 source is outside package advisory scanning.",
+    "Only the new candidate tree was secret-scanned; historical source repository history is not certified."
+  ],
+  "secret_scan": {
+    "tool": "detect-secrets 1.5.0",
+    "network_verification": false,
+    "findings_reviewed": 25,
+    "confirmed_credentials": 0,
+    "classification": "Explicit SHA256 integrity hashes, Git commit identifiers, and the target repository name; all manually reviewed",
+    "files_scanned": 86
+  }
+}

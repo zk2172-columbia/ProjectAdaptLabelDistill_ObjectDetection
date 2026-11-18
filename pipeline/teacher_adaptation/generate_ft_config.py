@@ -59,6 +59,10 @@ def main() -> None:
         )
 
     generated_path = train_module_root / sam3_cfg["generated_config_relpath"]
+    if not generated_path.resolve().is_relative_to((train_module_root / "configs").resolve()):
+        raise ValueError("Generated config must remain under SAM3 sam3/train/configs")
+    if generated_path.exists():
+        raise FileExistsError(f"Refusing to overwrite teacher configuration: {generated_path}")
     generated_path.parent.mkdir(parents=True, exist_ok=True)
     with open(generated_path, "w") as f:
         # Hydra's "@package _global_" directive lives in a YAML comment, which

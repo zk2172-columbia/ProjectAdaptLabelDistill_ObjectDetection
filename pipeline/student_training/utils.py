@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List
 
 import yaml
+from confidence import load_confidence
 
 
 def load_weights_json(path: str | Path) -> Dict[str, List[float]]:
@@ -18,14 +19,8 @@ def load_weights_json(path: str | Path) -> Dict[str, List[float]]:
     The JSON produced by pseudo-labeling is keyed by absolute image path.  We index by
     stem so the lookup is robust to path changes between machines / runs.
     """
-    with open(path) as f:
-        raw: dict = json.load(f)
-
-    result: Dict[str, List[float]] = {}
-    for img_path, boxes in raw.items():
-        stem = Path(img_path).stem
-        result[stem] = [float(b["w_sam3"]) for b in boxes]
-    return result
+    return {stem: [b["w_sam3"] for b in boxes]
+            for stem, boxes in load_confidence(path).items()}
 
 
 def _reject_placeholders(config_path: Path, text: str) -> None:
@@ -62,7 +57,7 @@ def load_config(path: str | Path) -> dict:
     return cfg
 
 
-def resolve_dataset_paths(cfg: dict, key: str) -> list[str]:
+def resolve_dataset_paths(cfg: dict, key: str, yaml_path: str | Path | None = None) -> list[str]:
     """Resolve a dataset yaml's `train:`/`val:` entry to a list of absolute directories.
 
     Entries may be a single string or a list, absolute or relative to the yaml's `path:`.
@@ -75,7 +70,9 @@ def resolve_dataset_paths(cfg: dict, key: str) -> list[str]:
     val = cfg.get(key)
     if val is None:
         return []
-    base = cfg.get("path", "")
+    base = Path(cfg.get("path") or "")
+    if not base.is_absolute():
+        base = (Path(yaml_path).absolute().parent if yaml_path else Path.cwd()) / base
     if isinstance(val, str):
         val = [val]
     resolved = []
@@ -95,7 +92,7 @@ def dataset_train_paths(dataset_yaml_path: str | Path) -> list[str]:
     """
     with open(dataset_yaml_path) as f:
         cfg: dict = yaml.safe_load(f)
-    return resolve_dataset_paths(cfg, "train")
+    return resolve_dataset_paths(cfg, "train", dataset_yaml_path)
 
 
 def _relative_to(path: str | Path, base: Path) -> str:
@@ -133,9 +130,9 @@ def create_combined_dataset_yaml(
     with open(pl_yaml_path) as f:
         pl_cfg: dict = yaml.safe_load(f)
 
-    gt_train = resolve_dataset_paths(gt_cfg, "train")
-    pl_train = resolve_dataset_paths(pl_cfg, "train")
-    gt_val = resolve_dataset_paths(gt_cfg, "val") or resolve_dataset_paths(pl_cfg, "val")
+    gt_train = resolve_dataset_paths(gt_cfg, "train", gt_yaml_path)
+    pl_train = resolve_dataset_paths(pl_cfg, "train", pl_yaml_path)
+    gt_val = resolve_dataset_paths(gt_cfg, "val", gt_yaml_path) or resolve_dataset_paths(pl_cfg, "val", pl_yaml_path)
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -157,27 +154,7 @@ def create_combined_dataset_yaml(
     return output_path
 
 
-def maybe_shutdown(cfg: Dict, force: bool = False) -> None:
-    """Shut down the machine if configured or forced.
-
-    Parameters
-    ----------
-    cfg:
-        Top-level config dict. Reads ``shutdown_on_completion`` (bool, default False).
-    force:
-        If True, shut down regardless of the config value (e.g. from --shutdown CLI flag).
-    """
-    if not (force or cfg.get("shutdown_on_completion", False)):
-        return
-
-    print("\n── Shutdown scheduled ───────────────────────────────────────────")
-    print("  Machine will shut down in 10 seconds.")
-    print("  Press Ctrl+C to cancel.")
-    print("─────────────────────────────────────────────────────────────────")
-    try:
-        time.sleep(10)
-    except KeyboardInterrupt:
-        print("Shutdown cancelled.")
-        return
-
-    subprocess.run(["sudo", "shutdown", "-h", "now"], check=True)
+def maybe_shutdown(cfg, force=False) -> None:
+    """Power management is deliberately outside the release pipeline."""
+    if force or cfg.get("shutdown_on_completion", False):
+        raise ValueError("Power management is not supported by the release pipeline")

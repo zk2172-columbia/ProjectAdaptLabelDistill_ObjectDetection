@@ -1,0 +1,15 @@
+{
+  "source_repository": "zk2172-columbia/ProjectPcatcher-NOAA",
+  "subtree": "Object_detection/Student_Teacher_Pipeline",
+  "parent_head": "6489372b896a0fb494ba98a426ae7670a0c9eaf1",
+  "working_tree": "Audited dirty snapshot included; not equivalent to pristine parent commit",
+  "recent_author": "anrunwang",
+  "sam3_original_gitlink": "4b62d7dd39d4c69b7230ce56ee384ae8029c6967",
+  "sam3_public_base": "f6e51f59500a87c576c2df2323ce56b9fd7a12de",
+  "sam3_patch_sha256": "7764004a96e9f296cf448ccf2426871cbbd59d1799759e426909c1656c93ebda",
+  "sam3_patch_reconstruction": "6 files byte-identical after clean reapplication",
+  "target_repository": "zk2172-columbia/ProjectAdaptLabelDistill_ObjectDetection",
+  "target_state_verified": false,
+  "publication_authorized": false,
+  "scope": "Private local integration candidate"
+}

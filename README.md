@@ -1,155 +1,144 @@
-# Adapt, Label, Distill: Confidence-Guided Foundation Model Supervision for Efficient Object Detection
+# ALD — Adapt, Label, Distill
 
-A vision foundation model (SAM 3) is adapted on a small labeled target set, used **offline** to
-pseudo-label a much larger unlabeled set, and distilled into a compact YOLOv11 student that is the
-only model deployed. Pseudo-labels are weighted by teacher confidence, and uncertain detections are
-*zero-gated* — kept during label assignment but given zero loss weight, so they are never learned
-as background.
+Private integration candidate for the original ALD paper pipeline. Adapt a SAM3 teacher,
+label the unlabeled pool offline, then train a confidence-weighted YOLO11 student.
+Only the student is required at deployment.
 
-<img src="pipeline/docs/pipeline_overview.png" width="800">
+This tree is prepared for private testing, not approved for public distribution. The
+source snapshot and fixes are described in [the integration notes](docs/PRIVATE_INTEGRATION.md).
+No dataset or model checkpoint is included.
 
-The teacher is used only to build the annotation set and is absent at deployment. On an NVIDIA
-Jetson AGX Orin the student runs at **188 FPS** against SAM 3's **2.9 FPS**.
+## Install (Linux, Python 3.12)
 
-This code is for research use.
-
-## Installation
+Create a dedicated environment; do not install into a running research environment.
 
 ```bash
-git clone --recurse-submodules git@github.com:zk2172-columbia/ProjectPcatcher-NOAA.git
-cd ProjectPcatcher-NOAA/Object_detection/Student_Teacher_Pipeline
-
-conda env create -f experiment_files/conda_env/ald_env.yml
-conda activate ald
-
-export PRJROOT=$PWD/pipeline
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install pip==26.2.0 setuptools==84.1.0
+# CPU verification:
+python -m pip install torch==2.13.0 torchvision==0.28.0 --index-url https://download.pytorch.org/whl/cpu
+# CUDA installation must be validated separately against the selected PyTorch wheel and host driver.
+python -m pip install -r environments/requirements-student.txt
 ```
 
-One environment carries `sam3`, `ultralytics`, `torch`, `pycocotools` and `faster-coco-eval`
-together. `faster-coco-eval` is an *optional* ultralytics extra and every reported metric depends
-on it — reinstalling ultralytics without it silently removes the evaluator.
-
-## Data preparation
-
-Each dataset is partitioned into `train` (the labeled set `D_l`, ~5%), `label` (the unlabeled pool
-`D_u`), `val` and `eval` (the held-out test split). Splits are written once per dataset and never
-regenerated for a run.
+For Adapt and Label:
 
 ```bash
-cd $PRJROOT/data
-
-# edit split_config.yaml: source annotations, out_dir, shots, train_frac, seed
-python split_dataset.py --config split_config.yaml
+python scripts/setup_sam3.py
+python -m pip install -r environments/requirements-teacher.txt
+python -m pip install -e ./SAM3
 ```
 
-The split's `ground_truth_export:` block then writes `data/ground_truths/<dataset>/` — the fixed
-COCO + YOLO ground truth every number in the paper is scored against. Add the dataset's class list
-as `data/classes/<dataset>.yaml`.
+SAM3 is reconstructed from public commit `f6e51f59500a87c576c2df2323ce56b9fd7a12de`
+and `patches/sam3-image-training.patch`. The patch includes the original image-training
+and optional logging changes, plus CPU-safe device handling and modern resource loading. It does not replace
+SAM3 with the latest upstream. The setup command refuses to modify an existing checkout.
+Video inference is outside this image-only ALD workflow.
 
-## Training
+For an exact CPU dependency installation, use `python -m pip install -r environments/verified-cpu.lock.txt` before the editable SAM3 install.
+`environments/verified-cpu.lock.txt` records the tested Linux CPU environment. The older
+Conda export under `experiment_files/conda_env/` is historical provenance, not the supported
+installation path. A fresh CUDA training run has not been certified by the CPU checks.
 
-Every config ships as a template with a `<dataset>` placeholder. Replace it before the first run.
-
-### Step 0: set variables
+## Tests
 
 ```bash
-export DATASET=garbage-classification     # a directory under data/ground_truths/
-export RUN=my-run                         # names every output directory for this run
+python -m unittest discover -s tests -v
+python scripts/check_entrypoints.py
+python scripts/smoke_student.py --output /tmp/ald-student-smoke-01
+python scripts/smoke_pipeline.py --output /tmp/ald-pipeline-smoke-01
 ```
 
-### Step 1: adapt the teacher on the labeled set
+Use fresh output directories. The student smoke trains for one epoch on generated images
+without pretrained weights, exports a portable checkpoint, and scores a held-out synthetic
+split. The pipeline smoke runs the actual stage CLIs using synthetic cached teacher detections.
+It is a plumbing test, not an accuracy benchmark.
 
-SAM 3, 20 epochs at 1008×1008, batch 2, AdamW at 8e-5, vision and language backbones frozen.
+With an existing trusted local SAM3 checkpoint, the optional heavier check is:
 
 ```bash
-cd $PRJROOT/teacher_adaptation
-python run_teacher_adaptation.py --config config.yaml --run-name ft-sam3-$DATASET
+python scripts/smoke_teacher.py --checkpoint /path/to/sam3.pt --output /tmp/ald-teacher-smoke-01
 ```
 
-Produces `experiment_files/experiments/<run-name>/merged_checkpoint.pt`. Point
-`pseudo_labeling/config.yaml`'s `sam3.checkpoint_path` at it.
+No test downloads a model checkpoint or enables online tracking. Obtain base weights through
+the official SAM3 access process and record their SHA256 before use. Python model checkpoints
+must be trusted; never load arbitrary third-party pickle files.
 
-### Step 2: generate pseudo-labels for the unlabeled set
+## Configure a dataset
 
-The adapted teacher runs once over `D_u`; predictions are NMS'd at IoU 0.5, thresholded at
-τ = 0.25, and each surviving box keeps its confidence as a per-box weight.
+Prepare four disjoint COCO partitions: `train/`, `label/`, `val/`, `eval/`. Each contains its
+images and `_annotations.coco.json`. `train` is the labeled budget; `label` is the unlabeled
+pool. The class YAML contains `classes: [{id: 0, name: ..., text_prompt: ...}, ...]`.
+Do not regenerate paper splits while tuning the method.
 
 ```bash
-cd $PRJROOT/pseudo_labeling
-python run_pseudo_labeling.py --config config.yaml --run-name $RUN
+python scripts/configure_dataset.py \
+  --split-root /data/my_dataset \
+  --classes-file pipeline/data/classes/my_dataset.yaml \
+  --output configs/local/my_dataset \
+  --work-root /work/ald/my_dataset \
+  --teacher-checkpoint /work/ald/my_dataset/teacher-01/teacher/merged_checkpoint.pt
 ```
 
-Produces `yolo_data/$RUN/label/` with YOLO labels and `confidence_weights.json`.
+The command validates input paths and filename-level split overlap, then writes local
+configuration files. It does not train or alter source data. Patient/video/scene independence
+must be established in the dataset split itself; a filename check cannot prove that.
 
-### Step 3: train the student
-
-YOLOv11, 100 epochs at 640×640, batch 16. Ground-truth images contribute at full weight;
-pseudo-labeled boxes contribute in proportion to teacher confidence, and boxes below the
-zero-gating threshold η = 0.4 contribute nothing.
+Adapt once, then reuse the adapted checkpoint for Label and Distill:
 
 ```bash
-cd $PRJROOT/student_training
-python run_student_training.py --config config.yaml --run-name $RUN
+python pipeline/teacher_adaptation/run_teacher_adaptation.py \
+  --config configs/local/my_dataset/teacher_adaptation.yaml --run-name teacher-01
+python pipeline/run_pipeline.py \
+  --config configs/local/my_dataset/pipeline.yaml --run-name ald-01
 ```
 
-Or run steps 2 and 3 together under one run name:
+The default student arm is `gt_pl_perbox`, with `lambda1=0.5`, zero-gate `0.5`, and the
+original combined loader. The default pseudo-label cutoff is `0.25`, within-class NMS is
+`0.3`, and optional image masking is disabled. These are explicit configuration values;
+the cached main-table run evidence is recorded separately in `results/`.
+Balanced-loader, pure-mosaic and masking variants remain opt-in research paths.
 
-```bash
-cd $PRJROOT && python run_pipeline.py --run-name $RUN
-```
+A gated box remains in target assignment. Loss is suppressed for anchors assigned to that
+box; other background anchors still receive classification loss. This is not a guarantee
+that all pixels inside an uncertain object are excluded from background supervision.
 
-## Evaluation
+W&B and optional online trackers are disabled by default. To enable W&B, install it separately
+and explicitly configure `wandb.enabled`, project and entity. OS power-management commands
+are not part of the release pipeline.
 
-**mAP50, mAP50-95, APs, APm, APl** from COCOeval on the fixed held-out `eval` split, at
-confidence 0 and at most 300 detections per image. Those three settings are pinned in
-`evaluation/yolo/coco_eval.py` and are deliberately not configurable — they decide which
-detections COCOeval ever sees.
+## Evaluation and recorded results
 
-Step 3 scores itself when it finishes, writing `coco_metrics.json` into the run directory. To
-score a checkpoint on demand:
+The fixed protocol uses confidence `0.0`, detector NMS IoU `0.7`, per-image `max_det=300`,
+COCO AP at maxDets `300`, and AR at maxDets `100`. Do not mix these values with default
+COCO AP@100 or Ultralytics' own AP integration. See [evaluation protocol](pipeline/EVALUATION.md).
+Required evaluation failure returns a nonzero exit and records failure status.
+Re-evaluation must use a fresh prediction directory to avoid reading stale detections.
 
-```bash
-cd $PRJROOT/evaluation/yolo
-python eval_coco.py --weights ../../weights/$RUN/gt_pl_perbox/best_standard.pt
-```
+The six original YOLO11m ALD cached predictions were re-scored on 5090 with unchanged GT hashes.
+All six matched the saved metrics exactly. This validates the evaluator against recorded
+predictions, not a new teacher/student training reproduction.
 
-The SAM 3 teacher is scored through its own harness — see [`evaluation/README.md`](evaluation/README.md).
+| Dataset | Recorded mAP50:95 (%) |
+|---|---:|
+| Garbage | 51.638083 |
+| Fruitjes | 68.128132 |
+| Floating Waste | 39.963739 |
+| VisDrone | 18.524274 |
+| Xray | 69.798432 |
+| Pig Detection | 61.705138 |
 
-## Baselines
+Exact values, input hashes and test scope are in `results/paper_cached_regression.json`.
+The original baseline and full-supervision runs remain separate from this six-cell check.
 
-STAC-style self-training (Sohn et al.), sharing the same splits, student and scoring:
+## Attribution and distribution
 
-```bash
-cd $PRJROOT/baselines/stac
-python run_stac.py --run-name stac-$DATASET
-```
+Original ALD source: `zk2172-columbia/ProjectPcatcher-NOAA`, subtree
+`Object_detection/Student_Teacher_Pipeline`, parent commit `6489372b...` plus the audited
+working-tree delta. Recent source commits are attributed to `anrunwang`.
 
-## Results
-
-mAP50:95 on held-out test splits, 5% labeled target data, YOLOv11m student:
-
-| Setting | Garbage | Fruitjes | Floating Waste | VisDrone | Xray | Pig Detection | Avg |
-|---|---|---|---|---|---|---|---|
-| Labeled only | 30.8 | 60.4 | 36.4 | 12.5 | 73.0 | 60.8 | 45.7 |
-| STAC-style | 36.3 | 60.1 | 38.9 | 14.1 | 73.3 | 61.7 | 47.4 |
-| **Ours** | **51.6** | **68.1** | **40.0** | **18.5** | 69.8 | 61.7 | **51.6** |
-| Full supervision (100%) | 54.1 | 69.9 | 50.3 | 20.3 | 77.1 | 72.6 | 57.3 |
-
-## Citation
-
-```bibtex
-@inproceedings{adaptlabeldistill2027,
-  title     = {Adapt, Label, Distill: Confidence-Guided Foundation Model Supervision
-               for Efficient Object Detection},
-  author    = {Anonymous},
-  booktitle = {IEEE/CVF Winter Conference on Applications of Computer Vision (WACV)},
-  year      = {2027}
-}
-```
-
-## Acknowledgement
-
-- [SAM 3](https://github.com/facebookresearch/sam3) — the foundation teacher, included as a submodule.
-- [Ultralytics](https://github.com/ultralytics/ultralytics) — YOLOv11 student training and inference.
-- [STAC](https://github.com/google-research/ssl_detection) — the semi-supervised baseline this is compared against.
-- [faster-coco-eval](https://github.com/MiXaiLL76/faster_coco_eval) — the COCOeval implementation behind every reported metric.
+SAM3 retains its SAM License; Ultralytics retains AGPL-3.0. See
+[third-party notices](THIRD_PARTY_NOTICES.md). Private integration does not grant a new
+public redistribution license for code, weights or datasets. Public release, publication
+metadata and final licensing remain outside this private candidate's scope.

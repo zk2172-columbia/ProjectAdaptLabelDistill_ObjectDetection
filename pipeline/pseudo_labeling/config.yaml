@@ -11,8 +11,7 @@
 
 # ─── Run Control ──────────────────────────────────────────────────────────────
 # Automatically shut down the machine when run_pseudo_labeling.py finishes all steps.
-# Useful for long overnight inference runs. Requires passwordless sudo shutdown.
-# Can also be forced per-run with the --shutdown CLI flag.
+# Legacy field retained for compatibility; true/--shutdown is rejected.
 # Default: false (machine stays on).
 shutdown_on_completion: false
 
@@ -38,7 +37,7 @@ steps:
   - name: mask_low_confidence
     script: mask_low_confidence.py
     args: []
-    enabled: true
+    enabled: false
 
 # ─── SAM3 Model ───────────────────────────────────────────────────────────────
 sam3:
@@ -62,7 +61,7 @@ data:
   # full_trash_dataset holds all images; the split-level _annotations.coco.json
   # files in <dataset>/{train,val,eval,label}/ reference these
   # images by filename but do not contain copies of the files themselves.
-  image_dir: "../../experiment_files/finetuning-data/full_trash_dataset"
+  image_dir: "../../experiment_files/finetuning-data/<dataset>/label"
 
   # Optional COCO JSON. If provided, image list and metadata come from here
   # instead of scanning image_dir. Image paths are resolved relative to image_dir.

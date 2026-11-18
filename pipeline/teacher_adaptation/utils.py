@@ -131,7 +131,8 @@ def apply_overrides(tree: Dict[str, Any], overrides: Dict[str, Any] | None) -> D
 
 
 def merge_checkpoint_state(
-    hf_state: Dict[str, Any], ft_state: Dict[str, Any]
+    hf_state: Dict[str, Any], ft_state: Dict[str, Any], *,
+    allowed_skipped: list[str] | None = None,
 ) -> Tuple[Dict[str, Any], int, List[str]]:
     """Overlay a finetuned state dict onto an HF base state dict.
 
@@ -168,4 +169,9 @@ def merge_checkpoint_state(
         else:
             skipped.append(k)
 
+    if replaced == 0:
+        raise ValueError("Checkpoint merge replaced zero parameters")
+    unexpected = set(skipped) - set(allowed_skipped or [])
+    if unexpected:
+        raise ValueError(f"Unexpected unmatched checkpoint keys: {sorted(unexpected)}")
     return merged, replaced, skipped

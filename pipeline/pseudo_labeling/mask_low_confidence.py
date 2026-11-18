@@ -552,6 +552,8 @@ def main() -> None:
         help="Shut down the machine after completion.",
     )
     args = parser.parse_args()
+    if args.shutdown:
+        parser.error("Power management is not supported by the release pipeline")
 
     config_path = Path(args.config)
     resolved = None

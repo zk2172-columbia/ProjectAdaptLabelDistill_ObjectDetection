@@ -51,10 +51,16 @@ def main() -> None:
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--device", default="0")
     p.add_argument("--wandb-project", default="pcatcher")
-    p.add_argument("--wandb-entity", default="gpunewbie")
+    p.add_argument("--wandb-entity", default=None)
     p.add_argument("--wandb-name", default=None, help="Defaults to --run-name")
-    p.add_argument("--no-wandb", action="store_true")
+    p.add_argument("--no-wandb", action="store_true", help="Deprecated; logging is off by default")
+    p.add_argument("--wandb", action="store_true", help="Explicitly enable online logging")
     args = p.parse_args()
+    if not args.wandb or args.no_wandb:
+        import os
+        os.environ["WANDB_MODE"] = "disabled"
+        from ultralytics import settings
+        dict.update(settings, {"wandb": False, "mlflow": False, "clearml": False, "comet": False})
 
     data = Path(args.data)
     if not data.is_absolute():
@@ -84,7 +90,7 @@ def main() -> None:
     # Init before the trainer runs so ultralytics' wandb callback (which no-ops when a run is
     # already open) logs into this run rather than deriving its own project name from the
     # local output path. It still owns wandb.finish() at on_train_end.
-    if not args.no_wandb and wandb is not None:
+    if args.wandb and not args.no_wandb and wandb is not None:
         wandb.init(
             project=args.wandb_project,
             entity=args.wandb_entity,

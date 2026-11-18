@@ -104,6 +104,6 @@ output:
   root: "runs"
 
 wandb:
-  enabled: true
+  enabled: false
   project: "pcatcher"
-  entity: "gpunewbie"
+  entity: null

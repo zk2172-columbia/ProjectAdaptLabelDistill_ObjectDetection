@@ -45,6 +45,8 @@ def main() -> None:
         help="Shut down the machine after the whole pipeline completes (overrides config)",
     )
     args = parser.parse_args()
+    if args.shutdown:
+        parser.error("Power management is not supported by the release pipeline")
 
     config_path = Path(args.config)
     if not config_path.is_absolute():
@@ -53,11 +55,13 @@ def main() -> None:
         pcfg = yaml.safe_load(f)
 
     only = set(args.stages) if args.stages else None
+    if only and not only <= {stage["name"] for stage in pcfg["stages"]}:
+        parser.error("Unknown stage requested")
     for stage in pcfg["stages"]:
         if only is not None and stage["name"] not in only:
             print(f"\n[skip stage] {stage['name']} (not in requested --stages)")
             continue
-        stage_config = (PIPELINE_DIR / stage["config"]).resolve()
+        stage_config = (config_path.parent / stage["config"]).resolve()
         print(f"\n{'=' * 70}\n  PIPELINE STAGE: {stage['name']}  (run_name={args.run_name})\n{'=' * 70}")
         run_phase(stage_config, args.run_name)
 

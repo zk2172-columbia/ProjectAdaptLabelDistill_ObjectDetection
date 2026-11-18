@@ -23,6 +23,7 @@ Two problems this module centralizes:
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import tempfile
@@ -64,6 +65,8 @@ def write_resolved_config(config_path: str | Path, run_name: str) -> Path:
     the config through a classes_file-aware load_config, so the reference resolves the
     same way it would from the original config.
     """
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", run_name):
+        raise ValueError("run_name must be a safe single path component")
     config_path = Path(config_path).resolve()
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
@@ -108,6 +111,10 @@ def run_phase(
         raise SystemExit(f"No 'steps:' list found in {config_path}")
 
     only = set(only_steps) if only_steps else None
+    if only and not only <= {step["name"] for step in steps}:
+        raise ValueError(f"Unknown steps: {sorted(only - {step['name'] for step in steps})}")
+    if raw.get("shutdown_on_completion", False):
+        raise ValueError("Power management is not supported by the release pipeline")
     resolved = write_resolved_config(config_path, run_name)
     try:
         for step in steps:
@@ -130,23 +137,7 @@ def run_phase(
         resolved.unlink(missing_ok=True)
 
 
-def maybe_shutdown(enabled: bool) -> None:
-    """Shut down the machine after a 10s cancellable countdown, if enabled.
-
-    `enabled` is computed by the caller (typically `--shutdown` flag OR the config's
-    shutdown_on_completion value). Requires passwordless `sudo shutdown`.
-    """
-    if not enabled:
-        return
-
-    print("\n── Shutdown scheduled ───────────────────────────────────────────")
-    print("  Machine will shut down in 10 seconds.")
-    print("  Press Ctrl+C to cancel.")
-    print("─────────────────────────────────────────────────────────────────")
-    try:
-        time.sleep(10)
-    except KeyboardInterrupt:
-        print("Shutdown cancelled.")
-        return
-
-    subprocess.run(["sudo", "shutdown", "-h", "now"], check=True)
+def maybe_shutdown(enabled) -> None:
+    """Power management is deliberately outside the release pipeline."""
+    if enabled:
+        raise ValueError("Power management is not supported by the release pipeline")

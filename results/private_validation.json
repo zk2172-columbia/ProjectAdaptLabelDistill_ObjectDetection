@@ -1,0 +1,132 @@
+{
+  "date": "2026-11-18",
+  "decision": "Ready for private integration testing; full GPU training acceptance remains outstanding",
+  "environment": {
+    "python": "3.12",
+    "torch": "2.13.0+cpu",
+    "torchvision": "0.28.0+cpu",
+    "ultralytics": "8.4.21",
+    "lock_sha256": "87ef1ea840e45b5195c79bf6f22feba2ae97c0ceac49ea3bbf442059ee61eafe"
+  },
+  "unit_regressions": {
+    "passed": 26,
+    "failed": 0,
+    "covers": [
+      "confidence identity/alignment",
+      "neutral stock-loss value and gradient equivalence",
+      "empty-target backward",
+      "checkpoint merge and readback",
+      "teacher config generation",
+      "evaluation failure status",
+      "COCO AP300/AR100 backend parity"
+    ]
+  },
+  "entrypoints": [
+    {
+      "entrypoint": "pipeline/run_pipeline.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/teacher_adaptation/run_teacher_adaptation.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/teacher_adaptation/generate_ft_config.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/teacher_adaptation/run_finetune.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/teacher_adaptation/merge_checkpoint.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/pseudo_labeling/run_pseudo_labeling.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/pseudo_labeling/run_inference.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/pseudo_labeling/filter_and_convert.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/pseudo_labeling/mask_low_confidence.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/student_training/run_student_training.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/student_training/prepare_data.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/student_training/train.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/evaluation/yolo/eval_coco.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/evaluation/sam3/run_eval.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/baselines/stac/run_stac.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/baselines/stac/train_student.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/baselines/stac/pseudolabels.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "pipeline/train_baseline_yolo.py",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "scripts/configure_dataset.py",
+      "status": "passed"
+    }
+  ],
+  "upstream_sam3_training_cli_help": "passed",
+  "pipeline_smoke": {
+    "status": "passed",
+    "scope": "real Label conversion, fixed evaluation export, GT preparation, weighted Distill and COCOeval CLIs; synthetic teacher detections, no real teacher forward"
+  },
+  "teacher_smoke": {
+    "status": "passed",
+    "scope": "CPU local base SAM3 load and one synthetic image/text forward; not adaptation training",
+    "parameters": 840509750,
+    "detections": 200,
+    "elapsed_seconds": 122.17018713615835,
+    "checkpoint_sha256": "9999e2341ceef5e136daa386eecb55cb414446a00ac2b55eb2dfd2f7c3cf8c9e"
+  },
+  "pip_check": "passed",
+  "sam3_patch_reconstruction": "6 files byte-identical",
+  "cached_paper_results": {
+    "datasets": 6,
+    "maximum_absolute_metric_difference": 0,
+    "fresh_training_reproduced": false
+  },
+  "security_report": "security_review.json",
+  "not_certified": [
+    "Full GPU teacher adaptation and student training",
+    "Numerical reproduction from fresh teacher/student training",
+    "All paper baseline cells",
+    "Optional later research branches",
+    "Target GitHub state or visibility"
+  ],
+  "remote_mutations": false,
+  "publication": false
+}

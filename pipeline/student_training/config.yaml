@@ -85,11 +85,11 @@ combined_dataset_yaml_output: "../yolo_data/{run_name}/combined_dataset.yaml"
 experiments:
   # Stock v8DetectionLoss, no weighting knobs. Writes no w_eff.csv.
   gt_only:
-    enabled: true
+    enabled: false
 
   # Stock v8DetectionLoss on GT+PL: isolates "does PL data help?" from "does weighting help?".
   gt_pl_stock:
-    enabled: true
+    enabled: false
 
   # Per-image: every PL image weighs lambda1, GT weighs 1.0, under the unweighted normalizer,
   # so lambda1 is a clean global knob. mosaic_w_image: average because a mosaic can mix GT and
@@ -104,7 +104,7 @@ experiments:
   # contributes no loss, so an uncertain object is ignored rather than taught as background.
   # 0.0 disables the gate. Requires the box-changing augs below to stay 0.
   gt_pl_perbox:
-    enabled: false
+    enabled: true
     lambda1: 0.5
     zerogate: 0.5
 
@@ -195,9 +195,9 @@ output:
 # One project holds every run_name's experiments so they stay comparable across
 # pipeline runs. Logs to the shared PCatcher project under Zhengye Yang.
 wandb:
-  enabled: true
+  enabled: false
   project: "pcatcher"
-  entity: "gpunewbie"
+  entity: null
   # Groups the 5 experiments of one pipeline run together in the wandb UI,
   # derived from output.project's last path segment (i.e. this run's run_name).
   # job_type is the experiment name (gt_only, gt_pl_perbox, ...) so the same

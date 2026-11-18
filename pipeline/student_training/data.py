@@ -161,6 +161,9 @@ from ultralytics.utils import LOGGER
 from ultralytics.utils.instance import Instances
 
 from utils import load_weights_json
+from confidence import load_confidence
+import os
+import math
 
 def load_weights_json_full(path: str | Path) -> dict[str, list[dict[str, float]]]:
     """Load confidence_weights.json keyed by image *stem*, preserving per-box coords + w_sam3.
@@ -168,17 +171,7 @@ def load_weights_json_full(path: str | Path) -> dict[str, list[dict[str, float]]
     utils.load_weights_json returns only the w_sam3 list per stem, which is all the per-image
     path needs; the per-box path additionally needs each box's coordinates to match against.
     """
-    with open(path) as f:
-        raw: dict = json.load(f)
-    out: dict[str, list[dict[str, float]]] = {}
-    for img_path, boxes in raw.items():
-        stem = Path(img_path).stem
-        out[stem] = [
-            {"class_id": int(b["class_id"]), "cx": float(b["cx"]), "cy": float(b["cy"]),
-             "w": float(b["w"]), "h": float(b["h"]), "w_sam3": float(b["w_sam3"])}
-            for b in boxes
-        ]
-    return out
+    return load_confidence(path)
 
 
 # ── Transform overrides (carry the weights alongside cls) ──────────────────────────────────
@@ -313,6 +306,7 @@ class Phase2YOLODataset(YOLODataset):
         per_image: bool = True,
         mosaic_w_image: str = "primary",
         match_tol: float = 1e-4,
+        pseudo_label_paths: list[str] | None = None,
         **kwargs: Any,
     ) -> None:
         if mosaic_w_image not in ("primary", "average"):
@@ -321,6 +315,13 @@ class Phase2YOLODataset(YOLODataset):
             )
         if not 0.0 <= zerogate <= 1.0:
             raise ValueError(f"zerogate must be in [0, 1]; got {zerogate!r}")
+        if not math.isfinite(lambda1) or lambda1 < 0:
+            raise ValueError("lambda1 must be finite and non-negative")
+        if not math.isfinite(match_tol) or match_tol <= 0:
+            raise ValueError("match_tol must be positive and finite")
+        self._pseudo_label_paths = [Path(os.path.abspath(p)) for p in (pseudo_label_paths or [])]
+        if weights_json_path is not None and not self._pseudo_label_paths:
+            raise ValueError("Weighted training requires explicit pseudo_label_paths")
         self._weights_json_path = weights_json_path
         self._lambda1 = lambda1
         self._zerogate = zerogate
@@ -344,11 +345,42 @@ class Phase2YOLODataset(YOLODataset):
                 self._w_sam3_map = load_weights_json(weights_json_path)
 
         super().__init__(*args, **kwargs)
+        # Check source identity before any augmented sample is consumed.
+        self._validate_confidence_coverage()
         # self.labels is populated by super().__init__ -> get_labels()
         if self._per_image:
             self._build_image_weights()
 
     # ── Per-image weights ──────────────────────────────────────────────────────────────────
+
+    def _validate_confidence_coverage(self) -> None:
+        if self._weights_json_path is None:
+            return
+        listed = set()
+        directories = []
+        for root in self._pseudo_label_paths:
+            if root.is_file():
+                for line in root.read_text().splitlines():
+                    if line.strip():
+                        p = Path(line.strip())
+                        listed.add(Path(os.path.abspath(root.parent / p if not p.is_absolute() else p)))
+            elif root.is_dir():
+                directories.append(root)
+            else:
+                raise FileNotFoundError(f"Pseudo-label source does not exist: {root}")
+        seen = set()
+        for label in self.labels:
+            path = Path(os.path.abspath(label["im_file"]))
+            stem = path.stem
+            if stem in seen:
+                raise ValueError(f"Duplicate image stem in training data: {stem}")
+            seen.add(stem)
+            is_pl = path in listed or any(path.is_relative_to(root) for root in directories)
+            has_weights = stem in self._w_sam3_map
+            if is_pl != has_weights:
+                raise ValueError(f"GT/PL confidence coverage mismatch: {path}")
+            if is_pl and len(self._w_sam3_map[stem]) != len(label["cls"]):
+                raise ValueError(f"Pseudo-label/confidence box count mismatch: {path}")
 
     def _build_image_weights(self) -> None:
         """Compute self.image_weights — lambda1 for PL images, 1.0 for GT.
@@ -368,16 +400,21 @@ class Phase2YOLODataset(YOLODataset):
 
     # ── Per-box weights ────────────────────────────────────────────────────────────────────
 
-    def _weight_for_box(self, bbox: np.ndarray, json_boxes: list[dict[str, float]]) -> float:
+    def _weight_for_box(self, bbox: np.ndarray, json_boxes: list[dict[str, float]], class_id: int) -> float:
         """This box's loss weight: 1.0 for GT, 0.0 if gated, else w_sam3 · lambda1."""
         cx, cy, w, h = (float(v) for v in bbox)
         best, best_dist = None, self._match_tol
+        matches = 0
         for jb in json_boxes:
+            if jb["class_id"] != int(class_id):
+                continue
             d = max(abs(cx - jb["cx"]), abs(cy - jb["cy"]), abs(w - jb["w"]), abs(h - jb["h"]))
-            if d <= best_dist:
-                best_dist, best = d, jb["w_sam3"]
-        if best is None:
-            return 1.0  # GT / unmatched box
+            if d <= self._match_tol:
+                matches += 1
+                if d <= best_dist:
+                    best_dist, best = d, jb["w_sam3"]
+        if matches != 1:
+            raise ValueError(f"Expected one confidence match for PL box, found {matches}")
         if best < self._zerogate:
             return 0.0
         return best * self._lambda1
@@ -400,8 +437,9 @@ class Phase2YOLODataset(YOLODataset):
             bboxes = np.asarray(label["bboxes"], dtype=np.float64).reshape(-1, 4)  # xywh
             json_boxes = self._weight_map.get(Path(label["im_file"]).stem)
             weights = (
-                np.array([self._weight_for_box(b, json_boxes) for b in bboxes], dtype=np.float32)
-                if json_boxes
+                np.array([self._weight_for_box(b, json_boxes, c)
+                          for b, c in zip(bboxes, label["cls"].reshape(-1))], dtype=np.float32)
+                if json_boxes is not None
                 else np.ones(len(bboxes), dtype=np.float32)  # GT image
             )
 

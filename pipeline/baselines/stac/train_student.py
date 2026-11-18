@@ -188,7 +188,7 @@ def run_held_out_eval(
     # reopened by id rather than initialized fresh — a fresh init would create a second run.
     if wandb is not None and wandb_run_id:
         try:
-            run = wandb.init(project=cfg["wandb"]["project"], entity=cfg["wandb"].get("entity", "gpunewbie"), id=wandb_run_id,
+            run = wandb.init(project=cfg["wandb"]["project"], entity=cfg["wandb"].get("entity"), id=wandb_run_id,
                              resume="allow", reinit=True)
             run.summary.update(wandb_summary(payload))
             run.finish()
@@ -350,16 +350,18 @@ def main() -> None:
     # name from the local output path. It still owns wandb.finish() at on_train_end.
     wandb_run_id = None
     wandb_cfg = cfg.get("wandb", {})
-    if not wandb_cfg.get("enabled", True):
+    if not wandb_cfg.get("enabled", False):
         # Setting enabled: false is NOT enough on its own. Ultralytics' own callback initializes
         # a wandb run whenever `wb.run` is unset, deriving a project name from the local output
         # path — so skipping our init just hands the logging to it. WANDB_MODE=disabled is what
         # actually stops any run from being created.
         os.environ["WANDB_MODE"] = "disabled"
+        from ultralytics import settings
+        dict.update(settings, {"wandb": False, "mlflow": False, "clearml": False, "comet": False})
     elif wandb is not None:
         run = wandb.init(
             project=wandb_cfg["project"],
-            entity=wandb_cfg.get("entity", "gpunewbie"),
+            entity=wandb_cfg.get("entity"),
             group=args.run_name,
             name=f"{args.run_name}-student",
             job_type="student",

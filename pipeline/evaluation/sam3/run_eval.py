@@ -32,6 +32,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import sys
 import json
 import os
 import re
@@ -46,7 +47,7 @@ SAM3_ROOT = REPO_ROOT / "SAM3"
 GENERATED_CONFIG_NAME = "_pcatcher_eval_generated.yaml"
 GENERATED_CONFIG_REL = f"configs/roboflow_v100/{GENERATED_CONFIG_NAME}"
 
-DEFAULT_PYTHON = "/home/zklab/miniconda3/envs/ald/bin/python"
+DEFAULT_PYTHON = sys.executable
 
 # Mirrors yolo/coco_eval.py's STAT_INDEX / REPORTED, and SAM3's own COCO_METRICS naming
 # (sam3/eval/coco_eval_offline.py) — same six numbers, different label vocabulary to translate.

@@ -169,7 +169,7 @@ from data import (
 from loss import Phase2DetectionModel
 
 # Extra overrides each trainer consumes and strips before ultralytics sees them.
-_PHASE2_KEYS = ("weights_json_path", "lambda1", "zerogate", "spec")
+_PHASE2_KEYS = ("weights_json_path", "lambda1", "zerogate", "spec", "pseudo_label_paths")
 _BALANCED_KEYS = ("pl_img_path", "balance_ratio")
 _PURE_MOSAIC_KEYS = ("pl_img_path",)
 
@@ -309,7 +309,7 @@ class Phase2DetectionTrainer(DetectionTrainer):
         gs = max(int(unwrap_model(self.model).stride.max()), 32)
 
         if mode == "train":
-            if self.spec.per_box:
+            if self.spec.per_box or self.spec.mosaic_w_image == "average":
                 self._assert_box_safe_augment()
             weights_json_path = self._phase2_params["weights_json_path"]
             lambda1 = self._phase2_params["lambda1"]
@@ -337,6 +337,7 @@ class Phase2DetectionTrainer(DetectionTrainer):
             data=self.data,
             fraction=getattr(self.args, "fraction", 1.0) if mode == "train" else 1.0,
             weights_json_path=weights_json_path,
+            pseudo_label_paths=self._phase2_params["pseudo_label_paths"] if weights_json_path else None,
             lambda1=lambda1,
             zerogate=zerogate,
             **self.spec.dataset_flags(),

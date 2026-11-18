@@ -114,6 +114,8 @@ class Phase2DetectionLoss(v8DetectionLoss):
         # ── Build targets, appending box_weights as a trailing 7th column when needed ────
         # preprocess scatters the weight to the same (b, j) slot as gt_labels/gt_bboxes, and its
         # xywh2xyxy slice (out[..., 1:5]) touches only the bbox columns, leaving it untouched.
+        if self._uses_box_weights and "box_weights" not in batch:
+            raise ValueError("Per-box loss requires box_weights, including for empty batches")
         has_box_w = self._uses_box_weights and "box_weights" in batch
         cols = [batch["batch_idx"].view(-1, 1), batch["cls"].view(-1, 1), batch["bboxes"]]
         if has_box_w:
@@ -149,7 +151,7 @@ class Phase2DetectionLoss(v8DetectionLoss):
 
         # c: (bs, n_anchors, 1) — each anchor's owning-box weight, guarded at background [D6].
         c = None
-        if gt_weights is not None:
+        if gt_weights is not None and gt_weights.shape[1] > 0:
             c = gt_weights.squeeze(-1).gather(1, target_gt_idx)  # (bs, n_anchors)
             c = torch.where(fg_mask, c, torch.ones_like(c)).unsqueeze(-1)
 

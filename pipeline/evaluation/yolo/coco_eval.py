@@ -620,6 +620,9 @@ def score_checkpoint(
 
     coco_gt = _quiet_coco(spec.gt_json) if quiet else COCO(str(spec.gt_json))
 
+    preds_path = out_dir / name / "predictions.json"
+    if preds_path.exists():
+        raise FileExistsError(f"Use a fresh evaluation directory; refusing stale predictions: {preds_path}")
     YOLO(str(weights)).val(
         data=str(spec.data_yaml),
         split=spec.split,

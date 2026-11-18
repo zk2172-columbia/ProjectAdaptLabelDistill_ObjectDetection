@@ -503,6 +503,9 @@ def write_yolo_labels(
     -------
     Total number of boxes written.
     """
+    stems = [Path(path).stem for path in merged_by_image]
+    if len(set(stems)) != len(stems):
+        raise ValueError("Duplicate image stems would overwrite YOLO labels")
     yolo_labels_dir.mkdir(parents=True, exist_ok=True)
     total_boxes = 0
 
@@ -721,6 +724,8 @@ def main() -> None:
         help="Shut down the machine after completion (overrides config shutdown_on_completion)",
     )
     args = parser.parse_args()
+    if args.shutdown:
+        parser.error("Power management is not supported by the release pipeline")
 
     # ── Load config ──────────────────────────────────────────────────────────
     cfg = load_config(args.config)
@@ -778,11 +783,9 @@ def main() -> None:
     merged_by_image = result.merged_by_image
 
     if n_raw == 0:
-        print("No predictions to filter. Exiting.")
-        return
+        raise ValueError("No predictions to filter; refusing to produce a stale/empty training dataset")
     if n_after_cutoff == 0:
-        print("No predictions survive the hard cutoff. Exiting.")
-        return
+        raise ValueError("No predictions survive the cutoff; refusing to reuse stale labels")
 
     # ── Step 4: Write YOLO labels ────────────────────────────────────────────
     print(f"\nWriting YOLO label files to {yolo_labels_dir} ...")

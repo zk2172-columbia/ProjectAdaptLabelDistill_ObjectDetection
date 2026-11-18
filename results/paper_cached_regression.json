@@ -1,0 +1,104 @@
+{
+  "scope": "CPU-only rescoring of cached paper detections; no training or fresh inference",
+  "results": [
+    {
+      "dataset": "floating-waste-rf",
+      "status": "passed",
+      "max_absolute_difference": 0.0,
+      "metrics": {
+        "mAP50": 0.6505742992776953,
+        "mAP50-95": 0.39963738686851574,
+        "APs": 0.1999831609679671,
+        "APm": 0.48933435546873166,
+        "APl": 0.5967148582092529,
+        "AR": 0.5163504142915908
+      },
+      "gt_sha256": "5269de0eea511e42d0db4db71dd512ac626391790bd3630259e3246d60df4af4",
+      "predictions_sha256": "dbe5e5184e03e70ba44b8f4d3bfce6cf2970ef3aa3535b639e61f646fe5b129a",
+      "expected_checkpoint_sha256": "986da875a994439269990aeeb17d9691416c1fb59980d290935f91aaa671944e"
+    },
+    {
+      "dataset": "fruitjes-rf",
+      "status": "passed",
+      "max_absolute_difference": 0.0,
+      "metrics": {
+        "mAP50": 0.7245519946263015,
+        "mAP50-95": 0.6812813246440674,
+        "APs": -1.0,
+        "APm": 0.31896278758310614,
+        "APl": 0.6873564399386092,
+        "AR": 0.9597292117781722
+      },
+      "gt_sha256": "2ead14962910169e18883164371c47676b80456c89a0f1a93153572ee0aabb67",
+      "predictions_sha256": "b183e771ef862e49ca03ec404b9f69e8b662f16b23588ef4b4e70aff2ea5f5e5",
+      "expected_checkpoint_sha256": "587c71820bd7a6cbc7554e16b2f42daa62965317659d75e92e0ed3228b3c42f8"
+    },
+    {
+      "dataset": "pig-detection-rf",
+      "status": "passed",
+      "max_absolute_difference": 0.0,
+      "metrics": {
+        "mAP50": 0.974853294370497,
+        "mAP50-95": 0.6170513822756329,
+        "APs": 0.0,
+        "APm": 0.15,
+        "APl": 0.6187075411407623,
+        "AR": 0.68669145699106
+      },
+      "gt_sha256": "d659d06bded73f8beab40dbbf64b7b1fd9a249d4e828486b59164124bfc1b973",
+      "predictions_sha256": "ea7dcba61525716cc4d3d8fe13af295f6f6ce976f956f58736e8c8164edaae15",
+      "expected_checkpoint_sha256": "cd559de9a736391520fb394de61256ff275c3ff1e441c9910c7352131be3f59c"
+    },
+    {
+      "dataset": "xray-rf",
+      "status": "passed",
+      "max_absolute_difference": 0.0,
+      "metrics": {
+        "mAP50": 0.9890744946911374,
+        "mAP50-95": 0.6979843158499162,
+        "APs": 0.6719941915714389,
+        "APm": 0.6866885014543436,
+        "APl": 0.7960063871749951,
+        "AR": 0.7712144979245981
+      },
+      "gt_sha256": "8b9f17ee2e3e23a1c2403ef43e124cc3009d91d7c215521573094e4c8eea81ba",
+      "predictions_sha256": "084827746d646ddf571070124857a1cc1b8c457df3026a19b9226476f9cbe423",
+      "expected_checkpoint_sha256": "3ffd80eb78911a174a34c67f12b47ff5f1688d65286fb07deb4990db77e07475"
+    },
+    {
+      "dataset": "visdrone",
+      "status": "passed",
+      "max_absolute_difference": 0.0,
+      "metrics": {
+        "mAP50": 0.3164739479361362,
+        "mAP50-95": 0.18524273587122617,
+        "APs": 0.08917593748715825,
+        "APm": 0.2790328502396473,
+        "APl": 0.4403975825747053,
+        "AR": 0.3297561733900573
+      },
+      "gt_sha256": "99ff2588fe578097169fa69aab23f095a7c20e84e7e0ed5209ebfb36d09e7daa",
+      "predictions_sha256": "ce670c09a98d295d630beb06cb45743b77af811fae2d893da2f2e7fe4e14be75",
+      "expected_checkpoint_sha256": "c26abe5b82aa834cc74ab333154f70439220948563de7741f86ce066c724d9e9"
+    },
+    {
+      "dataset": "garbage",
+      "status": "passed",
+      "max_absolute_difference": 0.0,
+      "metrics": {
+        "mAP50": 0.6946618903863165,
+        "mAP50-95": 0.51638083025985,
+        "APs": 0.22516950589102236,
+        "APm": 0.5551623602385937,
+        "APl": 0.7973821896574299,
+        "AR": 0.6167510726604213
+      },
+      "gt_sha256": "24c232a13f528dbff8a80194480f1f563b2bab8238992cadd98d8069e8991e62",
+      "predictions_sha256": "8f1f6d27f229219b3bbf687b2de46bbd0ccaa6f2f9a7238123d60611a9a30b8a",
+      "expected_checkpoint_sha256": "976025f3b2b0b0ac000e5d5657aaf5bc9528be142df2c7adb77eadcba52a95d1"
+    }
+  ],
+  "source_evaluator_sha256": "e79fc8f10247157083a3aa7e93893ac25c85266e19a93f4e1ce8c17983d0d054",
+  "checked_on": "2026-11-18",
+  "fresh_training_reproduced": false
+}

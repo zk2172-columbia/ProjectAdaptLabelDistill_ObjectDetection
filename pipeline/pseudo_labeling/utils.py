@@ -276,33 +276,10 @@ def merge_multiclass_boxes(
 # ─── Shutdown helper ─────────────────────────────────────────────────────────
 
 
-def maybe_shutdown(cfg: Dict[str, Any], force: bool = False) -> None:
-    """Shut down the machine if configured or forced.
-
-    Parameters
-    ----------
-    cfg:
-        Top-level config dict. Reads ``shutdown_on_completion`` (bool, default False).
-    force:
-        If True, shut down regardless of the config value (e.g. from --shutdown CLI flag).
-    """
-    if not (force or cfg.get("shutdown_on_completion", False)):
-        return
-
-    import subprocess
-    import time
-
-    print("\n── Shutdown scheduled ───────────────────────────────────────────")
-    print("  Machine will shut down in 10 seconds.")
-    print("  Press Ctrl+C to cancel.")
-    print("─────────────────────────────────────────────────────────────────")
-    try:
-        time.sleep(10)
-    except KeyboardInterrupt:
-        print("Shutdown cancelled.")
-        return
-
-    subprocess.run(["sudo", "shutdown", "-h", "now"], check=True)
+def maybe_shutdown(cfg, force=False) -> None:
+    """Power management is deliberately outside the release pipeline."""
+    if force or cfg.get("shutdown_on_completion", False):
+        raise ValueError("Power management is not supported by the release pipeline")
 
 
 # ─── SAM3 utilities ───────────────────────────────────────────────────────────
@@ -363,6 +340,11 @@ def load_config(config_path: str | Path) -> Dict[str, Any]:
         with open(classes_file) as f:
             classes_doc = yaml.safe_load(f)
         cfg["classes"] = classes_doc["classes"]
+
+    sam3_cfg = cfg.get("sam3", {})
+    checkpoint = sam3_cfg.get("checkpoint_path")
+    if checkpoint and not Path(checkpoint).is_absolute():
+        sam3_cfg["checkpoint_path"] = str((config_dir / checkpoint).resolve())
 
     # data.image_dir and data.coco_json
     data = cfg.get("data", {})

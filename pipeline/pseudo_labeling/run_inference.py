@@ -300,6 +300,8 @@ def main() -> None:
         help="Shut down the machine after completion (overrides config shutdown_on_completion)",
     )
     args = parser.parse_args()
+    if args.shutdown:
+        parser.error("Power management is not supported by the release pipeline")
 
     # ── Load config ──────────────────────────────────────────────────────────
     cfg = load_config(args.config)

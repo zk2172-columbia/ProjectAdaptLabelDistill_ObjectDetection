@@ -13,6 +13,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import os
 import gc
 import json
 import shutil
@@ -119,7 +120,8 @@ def _build_base_overrides(cfg: dict, extra: dict | None = None) -> dict:
     out_cfg = cfg["output"]
 
     overrides: dict = {
-        "model": f"{model_cfg['architecture']}.pt",
+        "model": (model_cfg['architecture'] if Path(model_cfg['architecture']).suffix in (".pt", ".yaml", ".yml")
+                  else f"{model_cfg['architecture']}.pt"),
         "epochs": train_cfg["epochs"],
         "batch": train_cfg["batch"],
         "imgsz": train_cfg["imgsz"],
@@ -138,8 +140,9 @@ def _build_base_overrides(cfg: dict, extra: dict | None = None) -> dict:
     # Periodic numbered checkpoints (epoch10.pt, epoch20.pt, ...) alongside the last.pt/best.pt
     # ultralytics already writes every epoch. -1 (ultralytics' default) is off. Forwarded only
     # when the config names it, so a config written before this key existed is unchanged.
-    if "save_period" in train_cfg:
-        overrides["save_period"] = train_cfg["save_period"]
+    for key in ("save_period", "amp", "plots", "lr0", "close_mosaic", "pretrained"):
+        if key in train_cfg:
+            overrides[key] = train_cfg[key]
     # Forward augmentation overrides present in the training: block (decision (a) — shared
     # across all experiments). Keys absent from the config keep ultralytics' defaults.
     for k in _AUG_KEYS:
@@ -253,11 +256,11 @@ def run_test_eval(
     m = payload["metrics"]
     print("  " + "  ".join(f"{k} {m[k]:.4f}" for k in ("mAP50", "mAP50-95", "APs", "APm", "APl")))
 
-    if wandb_cfg and wandb_cfg.get("enabled", True) and wandb is not None and wandb_run_id:
+    if wandb_cfg and wandb_cfg.get("enabled", False) and wandb is not None and wandb_run_id:
         try:
             run = wandb.init(
                 project=wandb_cfg.get("project", "pcatcher"),
-                entity=wandb_cfg.get("entity", "gpunewbie"),
+                entity=wandb_cfg.get("entity"),
                 id=wandb_run_id,
                 resume="allow",
                 reinit=True,
@@ -301,11 +304,11 @@ def run_experiment(
     # name from the local output.project path). It still owns wandb.finish() at
     # on_train_end, so we don't call that ourselves.
     wandb_run_id = None
-    if wandb_cfg and wandb_cfg.get("enabled", True) and wandb is not None:
+    if wandb_cfg and wandb_cfg.get("enabled", False) and wandb is not None:
         wandb_name = f"{wandb_group}-{name.replace('_', '-')}" if wandb_group else name
         run = wandb.init(
             project=wandb_cfg.get("project", "pcatcher"),
-                entity=wandb_cfg.get("entity", "gpunewbie"),
+                entity=wandb_cfg.get("entity"),
             group=wandb_group,
             name=wandb_name,
             job_type=name,
@@ -326,20 +329,24 @@ def run_experiment(
         torch.cuda.empty_cache()
 
     # After the trainer is freed, so the eval does not contend with training's GPU memory. A
-    # failure here is reported but does not fail the arm — the checkpoint is already on disk and
-    # a sweep of 30 cells should not die on a scoring problem; it can be re-scored from the
-    # promoted checkpoint at any time.
+    # Required evaluation failures persist a status file and fail the process. The saved
+    # checkpoint can still be evaluated later in a fresh output directory.
     if eval_cfg is not None and eval_cfg.get("enabled", True):
         if best_standard is None:
-            print(f"Warning: no best_standard.pt for {name}; skipping held-out COCOeval.")
+            (save_dir / "evaluation_status.json").write_text(json.dumps(
+                {"status": "failed", "error": "missing best_standard.pt"}))
+            raise RuntimeError(f"{name}: missing best_standard.pt for required evaluation")
         else:
             try:
                 run_test_eval(
                     name, best_standard, save_dir, eval_cfg, overrides,
                     weights_dir=weights_dir, wandb_cfg=wandb_cfg, wandb_run_id=wandb_run_id,
                 )
-            except Exception as exc:  # noqa: BLE001
-                print(f"!! {name}: post-training evaluation failed: {exc}")
+                (save_dir / "evaluation_status.json").write_text(json.dumps({"status": "passed"}))
+            except (Exception, SystemExit) as exc:
+                (save_dir / "evaluation_status.json").write_text(json.dumps(
+                    {"status": "failed", "error": str(exc)}))
+                raise RuntimeError(f"{name}: required evaluation failed") from exc
             finally:
                 gc.collect()
                 if torch.cuda.is_available():
@@ -506,6 +513,8 @@ def main() -> None:
         ),
     )
     args = parser.parse_args()
+    if args.shutdown:
+        parser.error("Power management is not supported by the release pipeline")
 
     cfg = load_config(args.config)
     config_dir = Path(args.config).resolve().parent
@@ -545,10 +554,7 @@ def main() -> None:
     weights_dir  = Path(weights_dir) if weights_dir else None
 
     if gt_yaml and not Path(gt_yaml).exists():
-        print(f"Warning: gt.dataset_yaml not found at {gt_yaml}.")
-        print("  Run `python prepare_data.py --config config.yaml` first.")
-        print("  Skipping experiments that require GT data.")
-        gt_yaml = None
+        raise FileNotFoundError(f"GT dataset missing: {gt_yaml}; run prepare_data.py first")
 
     # Resolve combined dataset yaml (GT + PL). Both keys live at the config's top
     # level (not under output:), so read them from cfg, not out_cfg.
@@ -572,10 +578,18 @@ def main() -> None:
     if args.batch is not None:
         cli_overrides["batch"] = args.batch
 
+    cfg["output"]["project"] = _resolve(cfg["output"]["project"])
+    architecture = cfg["model"]["architecture"]
+    if "/" in architecture and not Path(architecture).is_absolute():
+        cfg["model"]["architecture"] = _resolve(architecture)
     base = _build_base_overrides(cfg, cli_overrides)
 
     # ── Weights & Biases ─────────────────────────────────────────────────────
     wandb_cfg = cfg.get("wandb", {})
+    if not wandb_cfg.get("enabled", False):
+        os.environ["WANDB_MODE"] = "disabled"
+        from ultralytics import settings
+        dict.update(settings, {"wandb": False, "mlflow": False, "clearml": False, "comet": False})
     # output.project is ".../training_runs/<run_name>" once {run_name} has been
     # resolved (by run_student_training.py, or left literal if train.py is run standalone
     # — see this module's docstring) — its last path segment IS the run_name,
@@ -585,14 +599,15 @@ def main() -> None:
     # ── Resolve which experiments to run ────────────────────────────────────
     experiments_cfg = cfg.get("experiments", {})
     requested = set(args.experiments) if args.experiments else None
+    unknown = (set(experiments_cfg) | (requested or set())) - set(ARMS)
+    if unknown:
+        raise ValueError(f"Unknown experiment arms: {sorted(unknown)}")
+    if not requested and not any(v.get("enabled", False) for v in experiments_cfg.values()):
+        raise ValueError("No experiment arms enabled")
 
     def _should_run(name: str) -> bool:
         exp = experiments_cfg.get(name, {})
-        if not exp.get("enabled", True):
-            return False
-        if requested is not None and name not in requested:
-            return False
-        return True
+        return name in requested if requested is not None else exp.get("enabled", False)
 
     # One subprocess per arm, then done — the child re-enters main() with a single --experiments
     # and takes the in-process path below. Placed after the config/yaml setup above so a broken
@@ -728,6 +743,9 @@ def main() -> None:
                 f"  or move {run_dir} aside."
             )
         if arm.use_weights:
+            if not weights_json or not Path(weights_json).is_file():
+                raise FileNotFoundError(f"{name}: confidence metadata is required: {weights_json}")
+            overrides["pseudo_label_paths"] = pl_img_path
             overrides["weights_json_path"] = weights_json
             overrides["lambda1"] = lambda1
             if zerogate:
