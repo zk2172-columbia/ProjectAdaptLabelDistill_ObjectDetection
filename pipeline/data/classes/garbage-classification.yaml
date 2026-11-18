@@ -1,0 +1,26 @@
+# The six garbage classes, in the order both ground_truths/garbage-classification/classes.yaml
+# and that tree's dataset.yaml `names:` use. id IS the YOLO class index, so the order is load-
+# bearing: student training's preflight compares it against the frozen copy under ground_truths/.
+#
+# text_prompt is pseudo-labeling-only (sent to SAM3) and is unused in practice here -- its
+# pseudo-labels already exist under yolo_data/5-85-10-sam3-seed42/ and are not regenerated.
+# Kept anyway so the file has the same shape as its five siblings. text_prompt == name.
+classes:
+- id: 0
+  name: "plastic"
+  text_prompt: "plastic"
+- id: 1
+  name: "metal"
+  text_prompt: "metal"
+- id: 2
+  name: "biodegradable"
+  text_prompt: "biodegradable"
+- id: 3
+  name: "cardboard"
+  text_prompt: "cardboard"
+- id: 4
+  name: "glass"
+  text_prompt: "glass"
+- id: 5
+  name: "paper"
+  text_prompt: "paper"

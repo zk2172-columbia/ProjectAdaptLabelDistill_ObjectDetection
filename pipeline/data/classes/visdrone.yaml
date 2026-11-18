@@ -1,0 +1,45 @@
+# VisDrone-DET class list — the 10 categories in official VisDrone-DET evaluation.
+#
+# Unlike the Roboflow ports, this order is NOT alphabetical: it is VisDrone's own
+# object_category numbering (1=pedestrian ... 10=motor) shifted down to the contiguous 0-based
+# range prepare_ground_truth.py requires. Keeping upstream's order is what makes a class index
+# here comparable to a published VisDrone number.
+#
+# Categories 0 (`ignored regions`) and 11 (`others`) are absent on purpose — the
+# VisDrone2018-DET-toolkit excludes them from evaluation, and visdrone_to_coco.py drops them
+# before the COCO json is written, so no annotation downstream ever carries them.
+#
+# `pedestrian` vs `people` is upstream's own distinction, not a duplication: pedestrian is a
+# human standing or walking, people is a human in any other pose. text_prompt spells that out
+# for the SAM3 teacher, which has no way to guess the convention from the bare class name.
+classes:
+- id: 0
+  name: "pedestrian"
+  text_prompt: "pedestrian, a person standing or walking"
+- id: 1
+  name: "people"
+  text_prompt: "person sitting, lying down, or riding"
+- id: 2
+  name: "bicycle"
+  text_prompt: "bicycle"
+- id: 3
+  name: "car"
+  text_prompt: "car"
+- id: 4
+  name: "van"
+  text_prompt: "van"
+- id: 5
+  name: "truck"
+  text_prompt: "truck"
+- id: 6
+  name: "tricycle"
+  text_prompt: "three-wheeled vehicle"
+- id: 7
+  name: "awning-tricycle"
+  text_prompt: "three-wheeled vehicle with a canopy or awning"
+- id: 8
+  name: "bus"
+  text_prompt: "bus"
+- id: 9
+  name: "motor"
+  text_prompt: "motorcycle or scooter"

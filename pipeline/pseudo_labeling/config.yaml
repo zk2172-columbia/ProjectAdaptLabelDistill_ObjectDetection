@@ -1,0 +1,222 @@
+# Pseudo-labeling Configuration — SAM3 teacher pseudo-label generation
+#
+# Usage:
+#   python run_pseudo_labeling.py --config config.yaml --run-name <name>
+#
+# Individual steps can still be run standalone (paths below contain a {run_name}
+# placeholder that only run_pseudo_labeling.py resolves — run_inference.py/filter_and_convert.py
+# themselves are unaware {run_name} templating exists):
+#   python run_inference.py    --config config.yaml [--resume]
+#   python filter_and_convert.py --config config.yaml
+
+# ─── Run Control ──────────────────────────────────────────────────────────────
+# Automatically shut down the machine when run_pseudo_labeling.py finishes all steps.
+# Useful for long overnight inference runs. Requires passwordless sudo shutdown.
+# Can also be forced per-run with the --shutdown CLI flag.
+# Default: false (machine stays on).
+shutdown_on_completion: false
+
+# ─── Pipeline Steps (used by run_pseudo_labeling.py) ───────────────────────────────────
+# Run in order; each entry's args are appended to the resolved --config call.
+# Disable a step by setting enabled: false. Add future steps here without
+# touching run_pseudo_labeling.py's code.
+steps:
+  - name: run_inference
+    script: run_inference.py
+    args: []
+    enabled: true
+  - name: filter_and_convert
+    script: filter_and_convert.py
+    args: []
+    enabled: true
+  # Step C (prototype). Consumes filter_and_convert's output and writes a
+  # SEPARATE masked dataset alongside it; the originals are never modified, so
+  # enabling it cannot disturb an existing run, and reverting is `rm -rf` on its
+  # output dir. Disabled by default while it is a prototype — a normal pseudo-labeling
+  # run is unaffected. Flip to true to fold it into the phase, or run
+  # mask_low_confidence.py standalone against an already-filtered run.
+  - name: mask_low_confidence
+    script: mask_low_confidence.py
+    args: []
+    enabled: true
+
+# ─── SAM3 Model ───────────────────────────────────────────────────────────────
+sam3:
+  # Path to a fine-tuned SAM3 checkpoint (merged format from download_checkpoints.ipynb).
+  # Set to null to use the HuggingFace default weights (zero-shot).
+  checkpoint_path: ../../experiment_files/experiments/trash-ft-sam3-seed42/merged_checkpoint.pt
+
+  # Input resolution passed to Sam3Processor. SAM3 default is 1008.
+  resolution: 1008
+
+  # Keep ALL detections from SAM3 (confidence_threshold=0.0).
+  # Filtering happens in filter_and_convert.py (Step B), not here.
+  confidence_threshold: 0.0
+
+  device: "cuda"         # "cuda" or "cpu"
+  dtype: "bfloat16"      # torch.autocast dtype; use "float16" if bfloat16 unsupported
+
+# ─── Input Data ───────────────────────────────────────────────────────────────
+data:
+  # Directory containing the actual image files.
+  # full_trash_dataset holds all images; the split-level _annotations.coco.json
+  # files in <dataset>/{train,val,eval,label}/ reference these
+  # images by filename but do not contain copies of the files themselves.
+  image_dir: "../../experiment_files/finetuning-data/full_trash_dataset"
+
+  # Optional COCO JSON. If provided, image list and metadata come from here
+  # instead of scanning image_dir. Image paths are resolved relative to image_dir.
+  # Use full_trash_dataset/_annotations.coco.json to run on the full image pool,
+  # or swap in a split-level JSON (e.g. <dataset>/train/_annotations.coco.json)
+  # to restrict inference to that split (image files are still read from image_dir).
+  coco_json: "../../experiment_files/finetuning-data/<dataset>/label/_annotations.coco.json"
+
+# ─── Object Classes ────────────────────────────────────────────────────────────
+# Shared with config.yaml so class ids can never drift out of sync between
+# the two phases. Point this at the dataset being run; one file per dataset lives in classes/.
+# to add/rename classes; text_prompt (SAM3 prompt text) lives there too.
+classes_file: "../data/classes/<dataset>.yaml"
+
+# ─── Inference Settings ───────────────────────────────────────────────────────
+inference:
+  # Visual prompting: use geometric box prompts derived from teacher adaptation seed annotations
+  # to supplement text prompting. Requires seed_coco_json and seed_image_dir.
+  # Keep false until teacher adaptation outputs are ready.
+  use_visual_prompting: false
+
+  # COCO JSON from teacher adaptation ground-truth labels (seed set with human-verified boxes).
+  # Required only if use_visual_prompting is true.
+  seed_coco_json: null
+
+  # Directory containing the teacher adaptation seed images.
+  seed_image_dir: null
+
+# ─── Filtering Settings (used by filter_and_convert.py) ──────────────────────
+filtering:
+  # Hard score cutoff, applied BEFORE the percentile filter below.
+  # Only detections with score > hard_score_cutoff survive this step.
+  # Set to null to disable (percentile filter then runs on all raw detections,
+  # same as before this option existed).
+  hard_score_cutoff: 0.25
+
+  # Percentile threshold applied to the SAM3 confidence score distribution
+  # that survives the hard cutoff above (no IoU involved — this is a score
+  # filter, not a mask/box overlap filter). Only detections above the Nth
+  # percentile are kept. Set to null to skip this step entirely (the hard
+  # cutoff above, if any, becomes the only score filter).
+  score_percentile: null
+
+  # Within-class NMS IoU threshold. Applied after the percentile filter,
+  # before cross-class spatial merging. Collapses same-class duplicates.
+  nms_iou_threshold: 0.3
+
+  # IoU threshold for cross-class spatial merging.
+  # Pairs of different-class boxes with IoU >= this value are candidates for
+  # merging (i.e., they occupy the same spatial location).
+  cross_class_merge_iou: 0.5
+
+  # Score-gap threshold for cross-class suppression.
+  # A lower-scoring box is suppressed ONLY IF the winner's score exceeds it by
+  # more than this amount.  When the gap is <= this value, BOTH boxes are kept
+  # because close scores indicate SAM3 is genuinely uncertain — most likely two
+  # co-located objects of different classes rather than one ambiguous detection.
+  # Rule of thumb: set to ~0.2–0.4; lower → more conservative (keep more boxes).
+  cross_class_score_gap: 0.3
+
+  # Drop images that end up with zero surviving boxes after all filtering.
+  # 0 = keep all images (write empty .txt); set > 0 to require at least N boxes.
+  min_boxes_per_image: 0
+
+  # How filter_and_convert.py reads raw_predictions.json. Both modes produce
+  # identical output; this only trades memory against assumptions.
+  #   memory - json.load() the whole file (default). Simplest, and makes no
+  #            assumption about record order — but peak RAM is several times the
+  #            file size, so it OOMs on large files. A 25GB raw_predictions.json
+  #            (~54M detections) needs well over 50GB of RAM here.
+  #   stream - two constant-memory ijson passes (<200MB regardless of file size).
+  #            Assumes all records for an image are contiguous, which
+  #            run_inference.py guarantees; errors out if that is violated.
+  #   auto   - stream if the file is >2GB, else memory.
+  # Override per-run with --load-mode. Use stream (or auto) for multi-GB prediction files.
+  load_mode: memory
+
+# ─── Low-Confidence Masking (used by mask_low_confidence.py) ─────────────────
+# PROTOTYPE. Runs after all of `filtering:` above. Rather than merely dropping a
+# low-confidence pseudo-label — which leaves its object in the image, unlabeled,
+# training the student to call it background — this paints those pixels out and
+# drops the label, so the box becomes neither a positive nor a false negative.
+#
+# Writes a NEW dataset next to the unmasked one (output.masked_data_dir below).
+# The original images, labels/ and confidence_weights.json are read-only here,
+# so the step is fully reversible: delete masked_data_dir. Re-running at a
+# different threshold needs no re-inference and no re-filtering.
+masking:
+  # Whether the step does anything when it runs. Note this is NOT what keeps the
+  # step out of a default pseudo-labeling run — that is its `enabled: false` entry in
+  # `steps:` above. This flag stays true so that enabling the step there is the
+  # only edit needed; set it false to no-op the step while leaving `steps:` alone.
+  enabled: true
+
+  # Boxes with w_sam3 >= this are kept untouched; boxes below it are removed
+  # from the annotations AND have their pixels painted over. A box exactly at
+  # the threshold is kept. 0.6 is the value the reported masked runs used.
+  mask_score_threshold: 0.6
+
+  # Fill color for masked regions. Defaults to Ultralytics' letterbox padding
+  # gray, so masked regions carry a value the model already sees around every
+  # letterboxed image rather than introducing pure black, which also occurs as
+  # genuine image content.
+  fill_rgb: [114, 114, 114]
+
+  # Grow each masked rectangle by this many pixels per side before painting,
+  # to catch the object fringe SAM3's box tends to leave just outside itself.
+  # 0 = paint exactly the box.
+  mask_padding_px: 0
+
+  # Subtract every kept box from the mask, so no pixel a surviving label depends
+  # on is ever painted. Low-confidence boxes very often overlap or sit entirely
+  # inside a confident one, and painting those
+  # naively would punch a hole through an object we still label.
+  # Leave true unless you are deliberately testing the naive behavior.
+  protect_kept_boxes: true
+
+  # A kept box whose pixels get painted over by at least this fraction ALSO loses
+  # its annotation — a label over nothing but flat fill would ask the student to
+  # detect an object in a blank rectangle, which is worse than either keeping or
+  # dropping the box honestly. 1.0 = drop only when the box is completely painted.
+  # Inert while protect_kept_boxes is true, since the carve-out means a kept box
+  # is never painted at all; this is the guard for the naive configuration.
+  drop_kept_if_masked: 1.0
+
+  # Images left with fewer than this many kept boxes are dropped from the masked
+  # dataset — a near-fully-masked image with no positives is noise, not signal.
+  # 0 = keep every image, including fully-masked ones with empty labels.
+  min_kept_boxes: 1
+
+  # Re-encode quality for masked JPEGs. Untouched regions have already been
+  # through one JPEG cycle, and masked regions are flat color.
+  jpeg_quality: 95
+
+# ─── Output Paths ─────────────────────────────────────────────────────────────
+# {run_name} is substituted by run_pseudo_labeling.py from its --run-name argument before
+# these paths are used — run_inference.py/filter_and_convert.py only ever see the
+# already-resolved literal paths. All paths are relative to this file's directory.
+output:
+  # Raw SAM3 predictions before any filtering. Written by run_inference.py.
+  raw_predictions_path: "../teacher_predictions/{run_name}/pseudolabel/raw_predictions.json"
+
+  # Directory for per-image YOLO label .txt files. Written by filter_and_convert.py.
+  yolo_labels_dir: "../yolo_data/{run_name}/label/labels"
+
+  # JSON mapping image paths to filtered detections with w^SAM3_i weights.
+  weights_json_path: "../yolo_data/{run_name}/label/confidence_weights.json"
+
+  # Ultralytics YOLO dataset.yaml for use with `yolo train`.
+  dataset_yaml_path: "../yolo_data/{run_name}/label/dataset.yaml"
+
+  # Root of the masked dataset written by mask_low_confidence.py. A sibling of
+  # label/ above, never inside it — everything in label/ stays untouched.
+  # Contains images/, labels/, confidence_weights.json, dataset.yaml and
+  # mask_manifest.json. Point config.yaml's pl_data here to train on it.
+  masked_data_dir: "../yolo_data/{run_name}/label_masked"
+

@@ -1,0 +1,100 @@
+# teacher adaptation Configuration — SAM3 Teacher Finetuning
+# See pipeline/teacher_adaptation/README.md for the full design rationale.
+#
+# Usage:
+#   python run_teacher_adaptation.py --config config.yaml --run-name <ft-experiment-name>
+#
+# Deliberately NOT wired into pipeline_config.yaml / run_pipeline.py: finetuning SAM3 is
+# coarse-grained (GPU-hours, run rarely) while the later stages get re-run many times against
+# the *same* resulting checkpoint while filtering thresholds or loss weights are tuned.
+# Coupling this stage's --run-name 1:1 with theirs would force a refinetune on
+# every minor iteration, so this phase uses its own independent --run-name/experiment
+# namespace. Once this phase finishes, copy the printed merged_checkpoint_path into
+# config.yaml's sam3.checkpoint_path by hand — same as the prior manual workflow.
+
+shutdown_on_completion: false
+
+# ─── Pipeline Steps (used by run_teacher_adaptation.py) ───────────────────────────────────
+# Run in order; each entry's args are appended to the resolved --config call.
+steps:
+  - name: generate_ft_config
+    script: generate_ft_config.py
+    args: []
+    enabled: true
+  - name: run_finetune
+    script: run_finetune.py
+    args: []
+    enabled: true
+  - name: merge_checkpoint
+    script: merge_checkpoint.py
+    args: []
+    enabled: true
+
+# ─── Dataset ───────────────────────────────────────────────────────────────────
+# Folder name under experiment_files/finetuning-data/ to finetune on. Must contain
+# train/_annotations.coco.json and val/_annotations.coco.json in COCO format
+# (e.g. <dataset>/). This becomes the sole entry of the generated
+# config's all_roboflow_supercategories list, at task_index 0.
+dataset: "<dataset>"
+
+# ─── SAM3 Paths ────────────────────────────────────────────────────────────────
+sam3:
+  # SAM3 submodule root. train.py is invoked as `python sam3/train/train.py` with this
+  # as its cwd (matches the invocation convention in SAM3/scripts/eval/*/README.md).
+  repo_root: "../../SAM3"
+
+  # Hydra template this phase copies and edits per --run-name. Lives under experiment_files/ (not
+  # inside the SAM3 submodule) so it's tracked by this repo's own git history instead of
+  # being a local-only scratch file inside a submodule checkout. Resolved relative to this
+  # config file's own directory (like output.* below) — unlike generated_config_relpath,
+  # this path has no Hydra discovery constraint since generate_ft_config.py only ever
+  # yaml.safe_load()s it directly, never passes it to train.py's -c flag.
+  template_config: "../../experiment_files/sam3_train_config/pipeline_sam3_ft_config.yaml"
+
+  # Where the per-run generated config is written, relative to <repo_root>/sam3/train/.
+  # Must stay under sam3/train/configs/ — train.py's initialize_config_module("sam3.train")
+  # can only discover config files physically inside that package tree (no --config-dir
+  # override exists in this script). {run_name} is substituted by run_teacher_adaptation.py.
+  generated_config_relpath: "configs/roboflow_v100/{run_name}.yaml"
+
+  use_cluster: 0 # 0 = run locally (matches the template's default), 1 = submit via submitit/SLURM
+  num_gpus: 1
+
+# Free-form Hydra key overrides applied on top of the template, as dotted paths into
+# the loaded YAML tree. Leave empty to use the template's values unchanged.
+# Example:
+#   overrides:
+#     scratch.max_epochs: 30
+#     scratch.train_batch_size: 4
+overrides:
+  trainer.logging.wandb_writer.project: "pcatcher"
+  trainer.logging.wandb_writer.entity: "gpunewbie"
+  trainer.logging.wandb_writer.should_log: true
+
+  # The SAM3 template ships path placeholders; these two must be overridden or this stage fails at
+  # load. Relative to this config file's directory — utils.PATH_OVERRIDE_KEYS makes them absolute
+  # before they reach the generated Hydra config, which train.py reads from the SAM3 submodule.
+  # gloo because NVML/nccl broke on this box — world_size is 1, so it is a no-op either way.
+  # maxdets 5000 stops the offline evaluator truncating at 100 and under-reporting AP.
+  paths.bpe_path: "../../SAM3/sam3/assets/bpe_simple_vocab_16e6.txt.gz"
+  paths.roboflow_vl_100_root: "../../experiment_files/finetuning-data"
+  trainer.distributed.backend: gloo
+  trainer.seed_value: 42
+  trainer.meters.val.roboflow100.detection.maxdets: 5000
+
+# ─── Output Paths ──────────────────────────────────────────────────────────────
+# {run_name} is substituted by run_teacher_adaptation.py before these paths are used.
+output:
+  # Root experiment dir for this finetuning run (checkpoints/, tensorboard/, logs/, dumps/).
+  # Written into the generated config's paths.experiment_log_dir.
+  experiment_dir: "../../experiment_files/experiments/{run_name}"
+
+  # Merged (HF base + finetuned) checkpoint written by merge_checkpoint.py. Copy this
+  # path into config.yaml's sam3.checkpoint_path once finetuning finishes.
+  merged_checkpoint_path: "../../experiment_files/experiments/{run_name}/merged_checkpoint.pt"
+
+  # Whether to keep the raw trainer checkpoint (checkpoints/checkpoint.pt) after
+  # merge_checkpoint.py finishes. It holds the optimizer/scaler/step state needed only
+  # to resume interrupted training, and runs ~3x larger than merged_checkpoint.pt (the
+  # only file the later stages actually read). Set to true if you expect to resume this run.
+  keep_raw_checkpoint: false

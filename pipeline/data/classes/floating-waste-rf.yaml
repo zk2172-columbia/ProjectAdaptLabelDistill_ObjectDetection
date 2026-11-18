@@ -1,0 +1,18 @@
+# Auto-generated from floating-waste-rf/train/_annotations.coco.json's real categories
+# (Roboflow's unused id=0 supercategory placeholder dropped). text_prompt == name.
+classes:
+- id: 0
+  name: "bottle"
+  text_prompt: "bottle"
+- id: 1
+  name: "can"
+  text_prompt: "can"
+- id: 2
+  name: "carton"
+  text_prompt: "carton"
+- id: 3
+  name: "paper"
+  text_prompt: "paper"
+- id: 4
+  name: "plastic"
+  text_prompt: "plastic"

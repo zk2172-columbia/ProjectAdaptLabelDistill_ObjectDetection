@@ -1,0 +1,6 @@
+# Experiment outputs: predictions, pseudo-labels, checkpoints, training runs, metrics.
+runs/
+# Generated during a run, next to the config it was derived from.
+stac_config.*.yaml
+__pycache__/
+.pytest_cache/

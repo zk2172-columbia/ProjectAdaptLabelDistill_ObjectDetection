@@ -1,0 +1,123 @@
+# data Configuration
+# See pipeline/data/README.md for the full rationale.
+#
+# Usage:
+#   python split_dataset.py --config split_config.yaml
+#
+# Use this strategy when the dataset already ships with a partition you want to KEEP
+# (a Roboflow export's 70/20/10 train/valid/test, say). The preset val and eval sets are
+# carried through untouched; only the preset train set is re-partitioned, into our smaller
+# `train` and the `label` pool the teacher pseudo-labels. If the dataset has no usable
+# pre-existing partition, merge it into one unified COCO json first.
+#
+# Deliberately NOT wired into pipeline_config.yaml / run_pipeline.py. Splitting a dataset
+# is a run-once-per-dataset action whose output every later phase depends on; re-running it
+# mid-experiment would silently move images between train/label and invalidate any checkpoint
+# or pseudo-label set produced against the old partition. Create the splits by hand, then
+# point teacher_adaptation/config.yaml's `dataset:` at the resulting directory and run the
+# pipeline against a partition that is already fixed.
+
+# ─── Source splits ─────────────────────────────────────────────────────────────
+# The three annotation files of the EXISTING partition, keyed by the OUTPUT split each one
+# becomes. Whatever the export calls them on disk is irrelevant — point `ann` at the right
+# file. Roboflow's usual layout is train/valid/test holding _annotations.coco.json; ODinW
+# uses annotations_without_background.json; a flat export may keep all three jsons in one
+# folder beside the images. All three are REQUIRED: this strategy carries the preset val and
+# eval sets through unchanged, so it cannot invent them.
+#
+# `img_dir` is the root that source's file_name entries resolve against. Leave null to use
+# the directory containing its own `ann` (the usual per-split-folder layout). Set it when the
+# export keeps images in one shared folder with several annotation files beside them.
+#
+# The three sources must agree on their categories — the same set of category ids, each bound
+# to the same name — because all four output splits carry one categories list. Declaration
+# order and supercategory are not compared. A mismatch is a hard error.
+#
+# A file_name appearing in more than one source is also a hard error: the same image would
+# land in more than one output split and leak between training and evaluation. Deduplicate the
+# export at the source; this step will not drop images to repair it, because which split keeps
+# the image is your decision.
+#
+# Relative paths resolve against this config file's directory.
+sources:
+  train:
+    ann: "../../experiment_files/finetuning-data/xray-rf/train/_annotations.coco.json"
+    img_dir: null
+  val:
+    ann: "../../experiment_files/finetuning-data/xray-rf/valid/_annotations.coco.json"
+    img_dir: null
+  eval:
+    ann: "../../experiment_files/finetuning-data/xray-rf/test/_annotations.coco.json"
+    img_dir: null
+
+# ─── Output ────────────────────────────────────────────────────────────────────
+# Written as <out_dir>/{train,label,val,eval}/, each holding _annotations.coco.json plus
+# relative symlinks into whichever source image root that split came from. No image bytes
+# are copied. Re-running purges images a split no longer claims.
+#
+# Source exports restart image ids at 0 in every split, so the three inputs collide. All four
+# output splits are RENUMBERED into one global contiguous id space (train, then label, val,
+# eval), annotation ids alongside; every image keeps source_image_id and source_split.
+#
+# Point teacher_adaptation/config.yaml's `dataset:` at this directory once the splits exist —
+# expects train/_annotations.coco.json and val/_annotations.coco.json, which this produces.
+out_dir: "../../experiment_files/finetuning-data/xray-rf-splits"
+
+# ─── Few-shot core (stage 1) ───────────────────────────────────────────────────
+# Images per category the train split must contain before any percentage-based top-up,
+# sampled from the PRESET TRAIN SET ONLY. The quota is IMAGE-level, not instance-level: an
+# image holding 14 boxes of one category spends exactly one shot for it. Categories overshoot
+# when they co-occur with a still-hungry category.
+#
+# The preset val/eval sets take no part in this — their category coverage is whatever the
+# source partition already gave them. Categories thinner than `shots`, or missing from a
+# split, are reported as warnings, not repaired.
+shots: 10
+
+# Seed for both stages. Stage 1 gets its own fresh random.Random(seed); stage 2 a second
+# stream. Because the sampler only cares about the relative order of image ids, the stage-1
+# core is identical to sampling the preset train json directly at the same seed and shots.
+seed: 42
+
+# ─── Train size (stage 2) ──────────────────────────────────────────────────────
+# Target train share of the OVERALL dataset — preset train + val + eval, NOT just the preset
+# train set. If the stage-1 core is smaller, images are drawn uniformly at random (not
+# stratified) from the rest of the preset train set until train reaches this size. If the core
+# is already this big or bigger, train is frozen: nothing added, nothing removed.
+#
+# label then takes everything left in the preset train set. val and eval keep whatever share
+# the source partition gave them, so with a Roboflow 70/20/10 export and train_frac 0.05 the
+# final whole-dataset split is roughly 5 / 65 / 20 / 10 for train / label / val / eval.
+train_frac: 0.05
+
+# ─── Minimum label size ────────────────────────────────────────────────────────
+# Floor for the label split left behind by train. This strategy never
+# takes images back out of train to satisfy it — the preset partition is yours to own, so it
+# HARD ERRORS instead when the preset train set cannot supply train and still leave this many
+# images for label (whether because the few-shot core is too large or because train_frac of
+# the overall dataset exceeds what the preset train set holds). val and eval come straight
+# from their sources, so their size is not this script's to guarantee.
+min_images_per_split: 1
+
+# ─── Ground-truth export (post-step) ───────────────────────────────────────────
+# After the splits are written, re-export them into pipeline/data/ground_truths/<dataset>/ in the
+# formats everything downstream consumes: YOLO labels + image symlinks for training, and a COCO
+# json for scoring with COCOeval (pipeline/EVALUATION.md).
+#
+# Turning this on is what gives the held-out ground truth a provenance: the export writes a
+# manifest.json recording the source paths, their sha256, and per-class counts, and re-running
+# over unchanged input reproduces the tree byte for byte.
+#
+# Every path here is a config value — this step is dataset-agnostic and hardcodes nothing.
+ground_truth_export:
+  enabled: true
+  # Root the <dataset>/ subdirectory is created under.
+  out_dir: "ground_truths"
+  # Class list giving the authoritative id order. Roboflow exports order categories
+  # ALPHABETICALLY and prepend a dummy supercategory; the YOLO class index every checkpoint in
+  # this pipeline was trained against is classes.yaml's order. Leaving this null derives the
+  # order from the COCO categories instead, which is right for a dataset the pipeline has no
+  # class list for and WRONG for one it does.
+  classes_file: "classes/<dataset>.yaml"
+  # Subdirectory name under out_dir. Null uses the basename of this config's out_dir.
+  dataset: null

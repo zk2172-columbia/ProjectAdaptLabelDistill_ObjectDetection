@@ -1,0 +1,24 @@
+# Auto-generated from fruitjes-rf/train/_annotations.coco.json's real categories
+# (Roboflow's unused id=0 supercategory placeholder dropped). text_prompt == name.
+classes:
+- id: 0
+  name: "Later beoordelen"
+  text_prompt: "Later beoordelen"
+- id: 1
+  name: "Pastinaak"
+  text_prompt: "Pastinaak"
+- id: 2
+  name: "Pastinaak half op beeld"
+  text_prompt: "Pastinaak half op beeld"
+- id: 3
+  name: "Peen"
+  text_prompt: "Peen"
+- id: 4
+  name: "Wortel"
+  text_prompt: "Wortel"
+- id: 5
+  name: "Wortel half op beeld"
+  text_prompt: "Wortel half op beeld"
+- id: 6
+  name: "trash"
+  text_prompt: "trash"

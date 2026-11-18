@@ -1,0 +1,35 @@
+# evaluation_config.yaml — defaults for eval_coco.py.
+#
+# These are the settings a bare `python eval_coco.py --weights <ckpt>` scores under. Everything
+# here can be overridden per-invocation by a CLI flag or by a --config batch file.
+#
+# See ../EVALUATION.md for the standard this implements. Three settings are deliberately NOT
+# configurable and live in coco_eval.py instead — conf (0.0 as of 2026-08-27, was 0.001), NMS
+# iou (0.7) and max_det (300).
+# They decide which detections COCOeval ever sees, and a config that quietly narrowed that would
+# produce a number which looks fine and compares against nothing.
+
+# ── The yardstick ─────────────────────────────────────────────────────────────
+# Ground-truth COCO json for the held-out split, built by data/prepare_ground_truth.py.
+# FIXED, and deliberately not templated on a run name: the thing being measured against must not
+# move with the arm being measured.
+gt: "../../data/ground_truths/<dataset>/eval/annotations.coco.json"
+
+# Dataset yaml val() runs against; the `split` key below must name the same images as `gt`.
+# ground_truths/<dataset>/dataset.yaml maps eval/ onto `test:`, so the two agree by construction.
+# (An arm's own yolo_data/<run>/gt_dataset.yaml names the same 1045 images and also works; the
+# ground_truths copy is preferred because its provenance is recorded in manifest.json.)
+data: "../../data/ground_truths/<dataset>/dataset.yaml"
+split: "test"
+
+# ── Inference settings ────────────────────────────────────────────────────────
+# What val() runs at. Match whatever the checkpoints were trained at — scoring at a different
+# resolution than training used is a real effect, not a rounding difference.
+imgsz: 640
+batch: 16
+device: "0"
+
+# ── Output ────────────────────────────────────────────────────────────────────
+# Per-target run dirs (each with its predictions.json) and coco_metrics.json land here, plus one
+# combined metrics.json. A targets file normally overrides this with its own directory.
+out_dir: "../../eval_results/coco_eval"

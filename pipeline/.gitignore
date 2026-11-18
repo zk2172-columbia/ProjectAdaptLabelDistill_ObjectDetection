@@ -1,0 +1,32 @@
+# Pipeline outputs — large files, not tracked in git
+weights/
+training_runs/
+teacher_predictions/
+yolo_data/
+eval_results/
+wandb/
+
+
+# Console captures of training runs. Regenerable, and every metric they contain is already
+# written as JSON next to the run (coco_metrics.json / results.csv).
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Checkpoints and model weights
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Leftover temp configs from interrupted runs (pipeline_common.write_resolved_config)
+.*.resolved.yaml
+logs/
+

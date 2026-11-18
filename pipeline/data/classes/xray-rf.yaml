@@ -1,0 +1,21 @@
+# Auto-generated from xray-rf/train/_annotations.coco.json's real categories
+# (Roboflow's unused id=0 supercategory placeholder dropped). text_prompt == name.
+classes:
+- id: 0
+  name: "DIP"
+  text_prompt: "DIP"
+- id: 1
+  name: "MCP"
+  text_prompt: "MCP"
+- id: 2
+  name: "PIP"
+  text_prompt: "PIP"
+- id: 3
+  name: "Radius"
+  text_prompt: "Radius"
+- id: 4
+  name: "Ulna"
+  text_prompt: "Ulna"
+- id: 5
+  name: "Wrist"
+  text_prompt: "Wrist"

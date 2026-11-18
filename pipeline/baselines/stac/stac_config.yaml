@@ -1,0 +1,109 @@
+# stac_config.yaml — the whole STAC run: teacher inference, pseudo-label filtering, student.
+#
+#   python run_stac.py --config stac_config.yaml --run-name stac-seed42
+#
+# Every path is relative to this file's directory and resolved by utils.load_config.
+# Reference: Sohn et al., "A Simple Semi-Supervised Learning Framework for Object Detection"
+# (arXiv:2005.04757) — the PDF sits next to this file.
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+
+# THE seed. Feeds ultralytics' init_seeds(seed + 1 + RANK) with deterministic mode on, AND both
+# of the balanced loader's generators (which ultralytics would otherwise seed from a hardcoded
+# constant, ignoring args.seed entirely). Every stage's output is written to disk, so a later
+# stage reproduces from an earlier one's artifacts regardless of hardware.
+seed: 42
+
+# ── Stage 1: the teacher ─────────────────────────────────────────────────────────────────────
+# STAC step 1-2: a detector trained on the labeled set alone, run over the unlabeled set.
+teacher:
+  # Trained on the 5% GT train split ONLY — 471 images, verified: its args.yaml names
+  # yolo_data/5-85-10-sam3-seed42/gt_dataset.yaml, whose train: key is train/images and which
+  # contains no pseudo-label path. 100 epochs, yolo11m, seed 42, stock v8DetectionLoss.
+  checkpoint: "../../training_runs/naive-sweep-seed42-gtonly/gt_only/weights/best_standard.pt"
+
+  # conf near-zero and iou near-one so the teacher's own post-processing suppresses as little as
+  # possible: ALL thresholding belongs to filter: below, and keeping the full score distribution
+  # on disk means tau can be retuned without re-running inference.
+  conf: 0.001
+  iou: 0.95
+  max_det: 300
+  imgsz: 640
+  device: "0"
+  half: true
+
+# ── Stage 2: NMS, then tau ───────────────────────────────────────────────────────────────────
+# STAC's entire pseudo-label filter, in order. There is nothing else — no percentile filter, no
+# cross-class merge, no masking. See pseudolabels.py --stage filter's docstring for what was removed.
+filter:
+  # Per-class NMS IoU. 0.5 is the standard test-time value for the detector STAC used, and is a
+  # DELIBERATE departure from this repo's other arms, which run 0.3 (a SAM3-era calibration).
+  nms_iou: 0.5
+  # The confidence threshold. "We use tau = 0.9 and lambda_u = 2 for all our experiments" (§4.1).
+  tau: 0.9
+
+# ── Data ─────────────────────────────────────────────────────────────────────────────────────
+data:
+  # The 85% unlabeled pool: 8,896 images. Only the image LIST is read — the annotations in this
+  # COCO file are never touched, which is what makes the split "unlabeled" for this experiment.
+  unlabeled_coco_json: "../../../experiment_files/finetuning-data/<dataset>/label/_annotations.coco.json"
+  image_dir: "../../../experiment_files/finetuning-data/full_trash_dataset"
+
+  # The labeled half — reused verbatim from the tree the TEACHER itself trained on, so the
+  # student's supervised images are provably the same 471, with no second symlink tree to drift.
+  gt_train_images: "../../yolo_data/5-85-10-sam3-seed42/train/images"   # 471
+  gt_val_images:   "../../yolo_data/5-85-10-sam3-seed42/val/images"     # 52 — selects the checkpoint
+
+  # The held-out yardstick: 1,045 images no arm of any experiment trains or checkpoint-selects
+  # on. A FIXED path, deliberately not derived from the run name — the thing every arm is
+  # measured against must not move with the arm.
+  eval_dataset_yaml: "../../data/ground_truths/<dataset>/dataset.yaml"
+  eval_split: "test"
+  # COCO ground truth for exactly those images, built by data/prepare_ground_truth.py.
+  # Scored with COCOeval via ../evaluation/yolo/coco_eval.py — the same module and the
+  # same file every other arm in this repo is measured with, which is the whole point of a
+  # reproduction. See pipeline/EVALUATION.md.
+  eval_gt_json: "../../data/ground_truths/<dataset>/eval/annotations.coco.json"
+
+# Shared with the rest of the repo so class ids cannot drift between the teacher and the student.
+classes_file: "../../data/classes/<dataset>.yaml"
+
+# ── Stage 3: the student ─────────────────────────────────────────────────────────────────────
+student:
+  # A FRESH COCO-pretrained checkpoint, not the teacher's weights: STAC's second stage trains a
+  # model, it does not continue the teacher.
+  model: "yolo11m.pt"
+
+  # lambda_u. "We use tau = 0.9 and lambda_u = 2 for all our experiments" (§4.1); Fig. 4 puts
+  # the optimum at 2 and the safe range at [1, 2]. Under this loss's unweighted normalizer it is
+  # a clean global scale: doubling it exactly doubles the pseudo-label half's gradient.
+  lambda_u: 2.0
+
+  # Pseudo-labeled share of every batch. 0.5 is STAC's 1:1. The batch is SPLIT (16 -> 8 + 8),
+  # not doubled, so VRAM and the LR schedule match this repo's other runs.
+  balance_ratio: 0.5
+
+  epochs: 100
+  # == epochs, i.e. early stopping never fires. The val split is 52 images, small enough that a
+  # single noisy epoch can win and then truncate the run at a spurious peak.
+  patience: 100
+  batch: 16
+  imgsz: 640
+  optimizer: "auto"
+  device: "0"
+  workers: 8
+
+  # Augmentation is left at ultralytics' defaults (mosaic 1.0, HSV, scale/translate, fliplr,
+  # erasing), standing in for STAC's RandAugment-based strong augmentation and applied to both
+  # halves rather than the unlabeled one only. See README.md, "Departures from the paper".
+  # close_mosaic keeps its default of 10 — mosaic off for the last 10 epochs.
+
+# ── Output ───────────────────────────────────────────────────────────────────────────────────
+# Everything this experiment produces lives under runs/<run_name>/, inside this directory, so
+# nothing lands in the shared training_runs/ | weights/ | yolo_data/ trees.
+output:
+  root: "runs"
+
+wandb:
+  enabled: true
+  project: "pcatcher"
+  entity: "gpunewbie"

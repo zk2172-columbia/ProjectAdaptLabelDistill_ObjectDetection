@@ -1,0 +1,204 @@
+# student training — YOLO student training on GT + SAM3 pseudo-labels.
+#
+#   python run_student_training.py --config config.yaml --run-name <name>
+#
+# Paths below carry a {run_name} placeholder that only run_student_training.py resolves; running
+# prepare_data.py or train.py directly against this file uses the literal text as a
+# directory name.
+#
+# The experiments: block picks which arms run and sets their per-run hyperparameters
+# (lambda1, zerogate, mosaic_w_image). What each arm IS lives in train.py's ARMS registry.
+# An arm this file does not mention defaults to ENABLED; a block naming an arm absent from
+# ARMS is ignored.
+#
+# Each weighted arm writes <run_dir>/w_eff.csv — epoch,mean_w_eff,mean_w_cls_eff. Z is the
+# unweighted normalizer, so reported box/cls/dfl scale with each batch's PL fraction: those
+# columns separate "the model improved" from "that epoch was PL-heavy". Compare arms on val
+# mAP, not loss.
+
+shutdown_on_completion: false
+
+# ── Pipeline Steps (used by run_student_training.py) ───────────────────────────────────
+# Run in order; each entry's args are appended to the resolved --config call.
+# Disable a step by setting enabled: false. Add future steps here (e.g. Stage B's
+# train_ema.py) without touching run_student_training.py's code.
+steps:
+  - name: prepare_data
+    script: prepare_data.py
+    args: []
+    enabled: true
+  - name: train
+    script: train.py
+    # Each entry is appended verbatim to `python train.py --config <resolved>`, so this is
+    # where train.py's CLI-only flags are set for a pipeline run, e.g.
+    #   --experiments a b         run only these arms, ignoring enabled: below
+    #   --label-lambda            append -lam<lambda1> to each run label
+    args: []
+    enabled: true
+
+# ── Pseudo-labeled data (pseudo-labeling output, consumed here) ──────────────────────
+# Points at the same unified yolo_data/{run_name}/label/ location pseudo-labeling writes to
+# (see config.yaml's output: section) — both phases share one run_name's data,
+# so there's no longer a path reaching across into pseudo_labeling/'s own directory.
+pl_data:
+  # YOLO dataset yaml produced by pseudo-labeling filter_and_convert.py
+  dataset_yaml: "../yolo_data/{run_name}/label/dataset.yaml"
+  # Per-box SAM3 confidence weights produced by pseudo-labeling
+  weights_json_path: "../yolo_data/{run_name}/label/confidence_weights.json"
+
+# ── Ground truth dataset ──────────────────────────────────────────────────────
+# Run prepare_data.py --config config.yaml to convert COCO annotations to
+# YOLO format and generate gt_dataset.yaml before running train.py.
+gt:
+  # COCO annotation files for each split. train/val/eval mirror
+  # experiment_files/finetuning-data/<dataset>/{train,val,eval}/ exactly:
+  #   train — GT training images
+  #   val   — stratified 10% of train, used for validation during training
+  #   eval  — true held-out set, used only to evaluate the fully trained model
+  train_coco_json: "../../experiment_files/finetuning-data/<dataset>/train/_annotations.coco.json"
+  val_coco_json:   "../../experiment_files/finetuning-data/<dataset>/val/_annotations.coco.json"
+  eval_coco_json:  "../../experiment_files/finetuning-data/<dataset>/eval/_annotations.coco.json"
+  # Directories containing the actual image files for each split
+  train_image_dir: "../../experiment_files/finetuning-data/<dataset>/train"
+  val_image_dir:   "../../experiment_files/finetuning-data/<dataset>/val"
+  eval_image_dir:  "../../experiment_files/finetuning-data/<dataset>/eval"
+  # Root output directory where prepare_data.py writes converted YOLO labels —
+  # the same unified location config.yaml's label/ split lives under.
+  output_dir: "../yolo_data/{run_name}"
+  # Path to the generated gt_dataset.yaml (written by prepare_data.py)
+  dataset_yaml: "../yolo_data/{run_name}/gt_dataset.yaml"
+
+# ── Object classes ─────────────────────────────────────────────────────────────
+# Shared with config.yaml so class ids can never drift out of sync between the two
+# phases. Point this at the dataset being run; one file per dataset lives in classes/.
+classes_file: "../data/classes/<dataset>.yaml"
+
+# ── Combined dataset (GT + PL) ──────────────────────────────────────────────
+# If null, train.py will auto-generate this from gt.dataset_yaml + pl_data.dataset_yaml.
+# Set explicitly if you want to control the combined yaml manually.
+combined_dataset_yaml: null
+# Path where the auto-generated combined yaml is written (if combined_dataset_yaml is null)
+combined_dataset_yaml_output: "../yolo_data/{run_name}/combined_dataset.yaml"
+
+# ── Stage A experiments ───────────────────────────────────────────────────────
+# Each experiment is run sequentially.  Disable any you do not need.
+experiments:
+  # Stock v8DetectionLoss, no weighting knobs. Writes no w_eff.csv.
+  gt_only:
+    enabled: true
+
+  # Stock v8DetectionLoss on GT+PL: isolates "does PL data help?" from "does weighting help?".
+  gt_pl_stock:
+    enabled: true
+
+  # Per-image: every PL image weighs lambda1, GT weighs 1.0, under the unweighted normalizer,
+  # so lambda1 is a clean global knob. mosaic_w_image: average because a mosaic can mix GT and
+  # PL tiles; set it to primary only if mosaic weighting is itself under test.
+  gt_pl_unweighted_absolute:
+    enabled: false
+    lambda1: 1.0
+    # mosaic_w_image: average
+
+  # Per-box: each PL box weighs w_sam3 * lambda1. `zerogate` additionally zeroes any PL box
+  # whose RAW w_sam3 is below it — the box keeps its pixels and its label-assignment slot but
+  # contributes no loss, so an uncertain object is ignored rather than taught as background.
+  # 0.0 disables the gate. Requires the box-changing augs below to stay 0.
+  gt_pl_perbox:
+    enabled: false
+    lambda1: 0.5
+    zerogate: 0.5
+
+# ── Model ─────────────────────────────────────────────────────────────────────
+model:
+  architecture: "yolo11m"   # pretrained checkpoint name (e.g. yolo11n, yolo11m, yolo26m)
+  freeze_backbone: 0       # number of backbone layers to freeze (0 = train all)
+
+# ── Training ──────────────────────────────────────────────────────────────────
+training:
+  epochs: 100
+  batch: 16
+  imgsz: 640
+  optimizer: "auto"
+  device: "0"               # GPU index or "cpu"
+  workers: 8
+  patience: 100              # early stopping patience (epochs without mAP improvement)
+
+  # Random seed, applied identically to EVERY arm in a run so they differ only in the thing
+  # under test — same weight init, same augmentation sampling, same data order. Ultralytics
+  # applies it as init_seeds(seed + 1 + RANK) and also sets deterministic mode (its own
+  # `deterministic: true` default). Change it to get an independent replicate of a whole
+  # comparison; keep it fixed to compare arms against each other.
+  seed: 42
+
+  # ── Augmentation (decision (a): shared by ALL experiments for a controlled A/B) ──
+  # Phase2YOLODataset carries per-box weights THROUGH mosaic + affine, so full default
+  # augmentation (mosaic=1.0, scale=0.5, translate=0.1, fliplr, HSV) is used for every
+  # experiment — the per-image vs per-box comparison differs only in the loss, not the data
+  # pipeline, and no mAP is sacrificed. Only mixup/cutmix/copy_paste are unsupported by the
+  # per-box carry (they compose boxes differently) and stay off (already ultralytics defaults);
+  # with per_box on, the trainer raises rather than silently misaligning weights.
+  # NOTE: these three are equally uncarried by mosaic_w_image: average, which is NOT guarded —
+  # keep them at 0. See README.md, "Augmentation".
+  mixup: 0.0
+  cutmix: 0.0
+  copy_paste: 0.0
+  # mosaic / scale / translate / fliplr / hsv_* left at ultralytics defaults (carried per-box).
+
+# ── Final evaluation (after each arm finishes training) ───────────────────────
+# train.py scores the arm's promoted best_standard.pt with COCOeval once its training
+# ends, via the shared evaluator in ../evaluation/yolo/coco_eval.py, and writes
+# <run dir>/coco_metrics.json (copied next to the promoted weights) plus an 'eval/' section in
+# that run's W&B summary. Reported: mAP50, mAP50-95, APs, APm, APl — see ../EVALUATION.md.
+#
+# val() still runs, but only to GENERATE detections; ultralytics' own mAP is not recorded,
+# because it uses a different AP integration convention and the two must never share a table.
+#
+# This is NOT the val split ultralytics scores every epoch: that one SELECTS the checkpoint, and
+# for a GT+PL arm it comes out of the same combined data the arm trained on, so quoting it as the
+# arm's result would be reporting the split that picked the model. This block is the held-out
+# yardstick — deliberately a FIXED path rather than one templated on {run_name}, because the arms
+# differ in what they train on and the thing they are measured against must not move with them.
+#
+# Delete the block (or set enabled: false, or pass --skip-test-eval) to train without scoring.
+evaluation:
+  enabled: true
+  # Dataset yaml whose `split` below names the held-out images. Its test: key is the GT eval
+  # split — the one no arm trains or checkpoint-selects on: 1045 images from
+  # experiment_files/finetuning-data/<dataset>. Built by data/prepare_ground_truth.py.
+  #
+  # train.py preflights this path (and gt_json below) BEFORE training starts, so a stale value
+  # fails in one line rather than after hours of GPU.
+  dataset_yaml: "../data/ground_truths/<dataset>/dataset.yaml"
+  split: "test"            # 'test' | 'val' | 'train' — which key of the yaml above to score
+  # COCO ground truth for the SAME images, built by data/prepare_ground_truth.py. The
+  # yardstick: fixed, provenance recorded in ground_truths/<dataset>/manifest.json, and never
+  # templated on {run_name} — it must not move with the arm being measured.
+  gt_json: "../data/ground_truths/<dataset>/eval/annotations.coco.json"
+  # imgsz / batch / device default to whatever the arm TRAINED with (training: above); set them
+  # here only to deliberately score at different settings than training used.
+  # imgsz: 640
+  # batch: 16
+  # device: "cuda"
+
+# ── Output ────────────────────────────────────────────────────────────────────
+output:
+  # Full ultralytics run directory (curves, confusion matrix, batch viz, its own
+  # weights/ subdir), kept separate from the promoted-checkpoint tree under weights/.
+  project: "../training_runs/{run_name}"
+  # Each experiment is saved under: project/<experiment_name>/
+
+  # Promoted/exported checkpoint (best_standard.pt) additionally copied here after
+  # each experiment, separate from the full training_runs/ artifact tree above.
+  weights_dir: "../weights/{run_name}"
+
+# ── Weights & Biases ─────────────────────────────────────────────────────────
+# One project holds every run_name's experiments so they stay comparable across
+# pipeline runs. Logs to the shared PCatcher project under Zhengye Yang.
+wandb:
+  enabled: true
+  project: "pcatcher"
+  entity: "gpunewbie"
+  # Groups the 5 experiments of one pipeline run together in the wandb UI,
+  # derived from output.project's last path segment (i.e. this run's run_name).
+  # job_type is the experiment name (gt_only, gt_pl_perbox, ...) so the same
+  # experiment across different run_names can also be filtered/compared directly.

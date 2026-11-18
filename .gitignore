@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv*/
+SAM3/
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.engine
+.env*
+!*.example
+wandb/
+.test-artifacts/

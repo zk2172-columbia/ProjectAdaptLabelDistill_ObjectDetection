@@ -1,0 +1,19 @@
+# Pipeline-level configuration — consumed by run_pipeline.py.
+# Each stage's own config owns its `steps:` list; this file only orders the stages.
+
+# Ordered list of stages run_pipeline.py executes, in this order, all pinned to one
+# --run-name. Teacher adaptation is not here: it has its own --run-name and is run
+# standalone, rarely. This is an EXPLICIT list (not auto-discovery of directories) so a
+# half-built stage can't be run by accident.
+#   name   — stage label (also selectable via `run_pipeline.py --stages <name>`)
+#   config — stage config file, relative to this pipeline/ directory
+stages:
+  - name: pseudo_labeling
+    config: pseudo_labeling/config.yaml
+  - name: student_training
+    config: student_training/config.yaml
+
+# Shut down the machine once the whole pipeline finishes. run_pipeline.py forces each
+# stage's own shutdown off and performs the real shutdown exactly once, here, at the end.
+# Can also be forced per-run with run_pipeline.py's --shutdown flag.
+shutdown_on_completion: false

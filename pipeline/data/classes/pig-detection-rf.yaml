@@ -1,0 +1,15 @@
+# Auto-generated from pig-detection-rf/train/_annotations.coco.json's real categories
+# (Roboflow's unused id=0 supercategory placeholder dropped). text_prompt == name.
+classes:
+- id: 0
+  name: "Berkshire"
+  text_prompt: "Berkshire"
+- id: 1
+  name: "Duroc"
+  text_prompt: "Duroc"
+- id: 2
+  name: "Landrace"
+  text_prompt: "Landrace"
+- id: 3
+  name: "Pietrain"
+  text_prompt: "Pietrain"
