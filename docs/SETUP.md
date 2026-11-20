@@ -3,40 +3,32 @@
 Run commands from the repository root. For the method overview, see the [README](../README.md).
 Datasets and model weights are obtained separately.
 
-## Install (Linux, Python 3.12)
+## Install
 
-Create a dedicated environment; do not install into a running research environment.
+For new setups, use the [environment installer or Docker image](ENVIRONMENT.md).
+It selects a compatible CPU/CUDA dependency set, prepares the pinned SAM3 source,
+and records installed package versions. The historical CPU lock remains a record
+of earlier validation.
 
-```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install pip==26.2.0 setuptools==84.1.0
-# CPU verification:
-python -m pip install torch==2.13.0 torchvision==0.28.0 --index-url https://download.pytorch.org/whl/cpu
-# CUDA installation must be validated separately against the selected PyTorch wheel and host driver.
-python -m pip install -r environments/requirements-student.txt
-```
+## One-command training
 
-For Adapt and Label:
+Use the [README quickstart](../README.md#getting-started) to run all stages with
+`scripts/run_ald.py`. It uses the same stage implementations described below.
+The convenience default is pretrained YOLO11n; the legacy dataset configuration
+generator below retains its original YOLO11m default.
 
-```bash
-python scripts/setup_sam3.py
-python -m pip install -r environments/requirements-teacher.txt
-python -m pip install -e ./SAM3
-```
+The command writes generated configurations under the run's `configs/` directory
+and the SAM3 training config under `artifacts/run/teacher/configs/`. No generated
+config needs to be written into the source checkout, which allows a read-only
+container filesystem. Stage failure or timeout stops the process group and
+records the failure in `status.json`; use a fresh output directory for a new run.
+Per-stage configurations remain available for deliberate manual recovery.
 
-SAM3 is reconstructed from public commit `f6e51f59500a87c576c2df2323ce56b9fd7a12de`
-and `patches/sam3-image-training.patch`. The patch includes the original image-training
-and optional logging changes, plus CPU-safe device handling and modern resource loading. It does not replace
-SAM3 with the latest upstream. The setup command refuses to modify an existing checkout.
-Video inference is outside this image-only ALD workflow.
-
-For an exact CPU dependency installation, use `python -m pip install -r environments/verified-cpu.lock.txt` before the editable SAM3 install.
-`environments/verified-cpu.lock.txt` records the tested Linux CPU environment. The older
-Conda export under `experiment_files/conda_env/` is historical provenance, not the supported
-installation path. Bounded RTX 4090 Adapt → Label → Distill checks have also passed; see the
-[GPU acceptance report](GPU_ACCEPTANCE_20261120.md). They used an existing CUDA environment,
-not a clean installation of this dependency file. The CPU lock is not a CUDA lock.
+`--stage-timeout SECONDS` places a wall-clock cap on each stage. Student AMP is
+off by default to avoid its additional automatic model download; opt in with
+`--student-amp` when appropriate. Teacher mixed precision follows its SAM3 config.
+Use `--student-model yolo11n.yaml` only when you intentionally want random
+initialization, such as a small smoke test. This is not the pretrained default.
 
 ## Tests
 

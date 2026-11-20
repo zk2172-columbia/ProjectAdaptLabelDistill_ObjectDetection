@@ -12,7 +12,7 @@ zstandard==0.25.0
 scikit-image==0.26.0
 scikit-learn==1.8.0
 ftfy==6.1.1
-triton==3.3.0
+# Triton is selected by the PyTorch backend; see requirements-cpu/cu130.txt.
 huggingface-hub==1.11.0
 omegaconf==2.3.0
 ijson==3.5.0

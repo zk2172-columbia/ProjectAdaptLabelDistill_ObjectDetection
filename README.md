@@ -14,40 +14,39 @@ Only the student is needed at inference time.
 
 ## Getting started
 
-Use Linux and Python 3.12. Teacher adaptation requires a CUDA-capable GPU. Obtain SAM3 weights through the [official SAM3 project](https://github.com/facebookresearch/sam3) and prepare your dataset separately; weights and datasets are not included.
-
-Follow the [installation and usage guide](docs/SETUP.md) to install dependencies and the pinned, patched SAM3 source.
-
-Prepare four disjoint COCO splits (`train/`, `label/`, `val/`, `eval/`), each containing images and `_annotations.coco.json`, plus a class-definition YAML. Then generate a local configuration:
+Use **Linux x86_64, Python 3.12 and an NVIDIA GPU**. Install into a fresh environment:
 
 ```bash
-python scripts/configure_dataset.py \
+python3.12 scripts/install_environment.py --backend cu130
+source .venv-ald/bin/activate
+```
+
+Prepare four disjoint COCO splits (`train/`, `label/`, `val/`, `eval/`), a class-definition YAML and a trusted local SAM3 checkpoint. See the [data guide](docs/SETUP.md#configure-a-dataset). Weights and datasets are not included.
+
+### Train with one command
+
+```bash
+python scripts/run_ald.py \
   --split-root /data/my_dataset \
   --classes-file /data/classes.yaml \
-  --output "$PWD/configs/my_dataset" \
-  --work-root /work/ald/my_dataset \
-  --teacher-checkpoint /work/ald/my_dataset/teacher-01/teacher/merged_checkpoint.pt
+  --base-checkpoint /weights/sam3.pt \
+  --output "$PWD/runs/my_dataset" \
+  --teacher-epochs 20 --student-epochs 100
 ```
 
-Adapt the teacher once, then run Label and Distill:
+This runs **SAM3 adaptation → pseudo-labeling → YOLO training → evaluation**. The default student is pretrained YOLO11n (downloaded on first use); pass `--student-model /weights/yolo11n.pt` to use local weights.
 
-```bash
-python pipeline/teacher_adaptation/run_teacher_adaptation.py \
-  --config "$PWD/configs/my_dataset/teacher_adaptation.yaml" \
-  --run-name teacher-01
+- Add `--dry-run` to check inputs and inspect the plan without writing files or starting training.
+- Choose epochs and batch sizes for your compute budget. Existing output directories are never overwritten.
+- Find the final student checkpoint in `result.json`, progress in `status.json` and stage logs under `logs/` inside the output directory.
 
-python pipeline/run_pipeline.py \
-  --config "$PWD/configs/my_dataset/pipeline.yaml" \
-  --run-name ald-01
-```
-
-Review the generated training settings before launching. For offline merging, set `sam3.base_checkpoint_path` in the teacher configuration to your local full SAM3 checkpoint. Online experiment tracking is disabled by default.
+For Docker, CPU setup and moving the runtime to another machine, see [portable environments](docs/ENVIRONMENT.md). For separate stage commands and advanced settings, see [installation and usage](docs/SETUP.md).
 
 ## Evaluation and validation
 
 Use the [evaluation protocol](pipeline/EVALUATION.md) for comparable metrics.
 
-The repository has passed 28 regression tests and a bounded GPU Adapt → Label → Distill smoke test on RTX 4090. These checks validate execution, not full reproduction of paper results. See the [GPU acceptance report](docs/GPU_ACCEPTANCE_20261120.md) for environment details and limitations.
+The repository has passed 47 regression tests and a bounded GPU Adapt → Label → Distill smoke test on RTX 4090. These checks validate execution, not full reproduction of paper results. See the [GPU acceptance report](docs/GPU_ACCEPTANCE_20261120.md) for environment details and limitations.
 
 After installation, run:
 

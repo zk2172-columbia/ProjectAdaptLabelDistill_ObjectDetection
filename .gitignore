@@ -12,3 +12,5 @@ SAM3/
 !*.example
 wandb/
 .test-artifacts/
+/runs/
+/configs/local/

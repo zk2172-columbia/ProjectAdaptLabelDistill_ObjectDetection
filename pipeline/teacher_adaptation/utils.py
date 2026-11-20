@@ -89,8 +89,19 @@ def load_config(config_path: str | Path) -> Dict[str, Any]:
         raise ValueError("Config must set 'dataset' to a folder under experiment_files/finetuning-data/.")
     if not sam3_cfg.get("template_config"):
         raise ValueError("Config must set sam3.template_config.")
-    if not sam3_cfg.get("generated_config_relpath"):
-        raise ValueError("Config must set sam3.generated_config_relpath.")
+    if sam3_cfg.get("generated_config_path"):
+        generated = Path(sam3_cfg["generated_config_path"])
+        if not generated.is_absolute():
+            generated = config_dir / generated
+        generated = generated.resolve()
+        if not out.get("experiment_dir"):
+            raise ValueError("External config requires output.experiment_dir")
+        config_root = Path(out["experiment_dir"]).resolve() / "configs"
+        if not generated.is_relative_to(config_root) or generated == config_root:
+            raise ValueError("External generated config must remain under output.experiment_dir/configs")
+        sam3_cfg["generated_config_path"] = str(generated)
+    elif not sam3_cfg.get("generated_config_relpath"):
+        raise ValueError("Config must set sam3.generated_config_path or sam3.generated_config_relpath.")
 
     return cfg
 

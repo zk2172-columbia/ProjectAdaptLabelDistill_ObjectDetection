@@ -3,13 +3,10 @@
 generate_ft_config.py — teacher adaptation, Step 1: Generate a per-run SAM3 Hydra config
 ==============================================================================
 
-Copies the shared SAM3 finetuning template (sam3.template_config) and edits it for
-this run: pins `all_roboflow_supercategories` to the single dataset being trained
-(at task_index 0), points `paths.experiment_log_dir` at this run's experiment dir,
-and applies any free-form `overrides:` from config.yaml. Writes the result
-under the SAM3 submodule's own configs/ tree, since train.py's
-`initialize_config_module("sam3.train")` can only discover configs physically
-located there (see config.yaml's comment on generated_config_relpath).
+Copies the shared SAM3 template and applies this run's dataset, output and overrides.
+An optional sam3.generated_config_path writes below the experiment output directory,
+so source packages can remain read-only. Legacy generated_config_relpath configs
+continue to write within the SAM3 package.
 
 Usage
 -----
@@ -58,13 +55,17 @@ def main() -> None:
             f"  Set them in {args.config}'s overrides: block (see PATH_OVERRIDE_KEYS in utils.py)."
         )
 
-    generated_path = train_module_root / sam3_cfg["generated_config_relpath"]
-    if not generated_path.resolve().is_relative_to((train_module_root / "configs").resolve()):
-        raise ValueError("Generated config must remain under SAM3 sam3/train/configs")
+    if sam3_cfg.get("generated_config_path"):
+        # load_config resolves and constrains this to experiment_dir/configs.
+        generated_path = Path(sam3_cfg["generated_config_path"])
+    else:
+        generated_path = train_module_root / sam3_cfg["generated_config_relpath"]
+        if not generated_path.resolve().is_relative_to((train_module_root / "configs").resolve()):
+            raise ValueError("Generated config must remain under SAM3 sam3/train/configs")
     if generated_path.exists():
         raise FileExistsError(f"Refusing to overwrite teacher configuration: {generated_path}")
     generated_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(generated_path, "w") as f:
+    with open(generated_path, "x") as f:
         # Hydra's "@package _global_" directive lives in a YAML comment, which
         # yaml.safe_load/yaml.dump silently drops on a round-trip. Without it, Hydra
         # nests this config under a group key instead of merging at the top level, and
