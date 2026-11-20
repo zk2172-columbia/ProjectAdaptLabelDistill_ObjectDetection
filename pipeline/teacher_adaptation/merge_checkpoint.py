@@ -62,8 +62,18 @@ def main() -> None:
             "run_finetune.py must complete (and save a checkpoint) before this step."
         )
 
-    print("[merge_checkpoint] downloading HF base checkpoint...")
-    hf_path = download_ckpt_from_hf()
+    local_base = cfg["sam3"].get("base_checkpoint_path")
+    if local_base:
+        hf_path = Path(local_base).expanduser()
+        if not hf_path.is_absolute():
+            hf_path = Path(args.config).resolve().parent / hf_path
+        hf_path = hf_path.resolve()
+        if not hf_path.is_file():
+            raise FileNotFoundError(f"Local base checkpoint not found: {hf_path}")
+        print(f"[merge_checkpoint] using local base checkpoint: {hf_path}")
+    else:
+        print("[merge_checkpoint] downloading HF base checkpoint...")
+        hf_path = download_ckpt_from_hf()
     hf_ckpt = torch.load(hf_path, map_location="cpu")
     hf_state = hf_ckpt["model"] if "model" in hf_ckpt else hf_ckpt
 

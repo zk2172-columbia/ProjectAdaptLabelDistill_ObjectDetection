@@ -43,6 +43,10 @@ sam3:
   # as its cwd (matches the invocation convention in SAM3/scripts/eval/*/README.md).
   repo_root: "../../SAM3"
 
+  # Optional trusted local full SAM3 base for offline checkpoint merging.
+  # Relative paths resolve from this configuration file; null uses Hugging Face.
+  base_checkpoint_path: null
+
   # Hydra template this phase copies and edits per --run-name. Lives under experiment_files/ (not
   # inside the SAM3 submodule) so it's tracked by this repo's own git history instead of
   # being a local-only scratch file inside a submodule checkout. Resolved relative to this

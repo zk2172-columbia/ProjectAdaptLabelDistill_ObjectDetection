@@ -249,3 +249,24 @@ index 4d6c071..495dd6c 100644
  
  
  # cache the opened file object, so that different calls to `setup_logger`
+diff --git a/sam3/train/utils/train_utils.py b/sam3/train/utils/train_utils.py
+index ca259a3..6621db2 100644
+--- a/sam3/train/utils/train_utils.py
++++ b/sam3/train/utils/train_utils.py
+@@ -144,13 +144,9 @@ def get_amp_type(amp_type: Optional[str] = None):
+ 
+ 
+ def log_env_variables():
+-    env_keys = sorted(list(os.environ.keys()))
+-    st = ""
+-    for k in env_keys:
+-        v = os.environ[k]
+-        st += f"{k}={v}\n"
+-    logging.info("Logging ENV_VARIABLES")
+-    logging.info(st)
++    # Environment values may contain credentials. Keep only key names for diagnostics.
++    logging.info("Environment variable names (values omitted): %s",
++                 ", ".join(sorted(os.environ)))
+ 
+ 
+ class AverageMeter:
