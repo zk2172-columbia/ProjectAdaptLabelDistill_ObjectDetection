@@ -46,7 +46,7 @@ For Docker, CPU setup and moving the runtime to another machine, see [portable e
 
 Use the [evaluation protocol](pipeline/EVALUATION.md) for comparable metrics.
 
-The repository has passed 47 regression tests and a bounded GPU Adapt → Label → Distill smoke test on RTX 4090. These checks validate execution, not full reproduction of paper results. See the [GPU acceptance report](docs/GPU_ACCEPTANCE_20261120.md) for environment details and limitations.
+The repository has passed 47 regression tests and a bounded GPU Adapt → Label → Distill smoke test on RTX 4090. These checks validate execution, not full reproduction of paper results. See the [one-command Docker validation](docs/ONE_COMMAND_VALIDATION.md) and [earlier GPU acceptance](docs/GPU_ACCEPTANCE_20261120.md) for details and limitations.
 
 After installation, run:
 

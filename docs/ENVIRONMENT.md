@@ -102,4 +102,4 @@ Move datasets and trusted checkpoints separately and use the same mounted paths.
 
 ## Validation scope
 
-Build and runtime check results are recorded during repository integration. A successful package resolution or image build does not establish numerical paper reproduction. CUDA training checks must use the target machine's current compute policy and resource availability.
+The CUDA image passed 47 tests and a bounded GPU Adapt → Label → Distill run; see [one-command validation](ONE_COMMAND_VALIDATION.md). A successful package resolution or image build does not establish numerical paper reproduction. CUDA training checks must use the target machine's current compute policy and resource availability.
