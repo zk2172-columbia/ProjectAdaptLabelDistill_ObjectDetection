@@ -24,6 +24,9 @@ COPY scripts/ ./scripts/
 COPY tests/ ./tests/
 COPY LICENSES/ ./LICENSES/
 COPY THIRD_PARTY_NOTICES.md README.md ./
+# Triton compiles its CUDA launcher at runtime, including in a read-only image.
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
 # Host checkouts may use a private umask. Runtime users need read/traverse, not write.
 RUN chmod -R a+rX /opt/ald \
     && git config --system --add safe.directory /opt/ald/SAM3

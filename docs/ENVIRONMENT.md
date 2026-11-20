@@ -1,6 +1,6 @@
 # Installation and portable environments
 
-The supported setup targets **Linux x86_64 with Python 3.12**, Git and Python venv support. A minimal server also needs the OpenCV runtime libraries (Debian/Ubuntu: libgl1 and libglib2.0-0); the Docker image supplies these. Choose `cu130` for GPU training or `cpu` for CPU smoke tests/inference. The installer creates a new environment and never modifies an existing one.
+The supported setup targets **Linux x86_64 with Python 3.12**, Git and Python venv support. A minimal server also needs the OpenCV runtime libraries (Debian/Ubuntu: libgl1 and libglib2.0-0); the Docker image supplies these. GPU training also requires a C/C++ compiler toolchain and C development headers (Debian/Ubuntu: `build-essential`) because Triton compiles its CUDA launcher at runtime. Keep the compiler installed during training; the Docker image includes it. Choose `cu130` for GPU training or `cpu` for CPU smoke tests/inference. The installer creates a new environment and never modifies an existing one.
 
 ## Local installation
 
