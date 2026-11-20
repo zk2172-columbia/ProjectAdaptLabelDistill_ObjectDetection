@@ -1,5 +1,7 @@
 # ALD — Adapt, Label, Distill
 
+A training pipeline for building compact object detectors for deployment in specialized domains with limited labeled data.
+
 Adapt a foundation-model teacher to a small labeled dataset, generate pseudo-labels for unlabeled images, and distill them into a compact object detector.
 
 1. **Adapt:** fine-tune a SAM3 teacher on labeled examples.
