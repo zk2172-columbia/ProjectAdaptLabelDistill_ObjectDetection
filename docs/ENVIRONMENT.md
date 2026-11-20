@@ -70,7 +70,7 @@ GPU containers require the host driver and [NVIDIA Container Toolkit](https://do
 mkdir -p "$PWD/runs"
 docker run --rm --init --gpus device=0 \
   --user "$(id -u):$(id -g)" --shm-size=2g \
-  --read-only --tmpfs /tmp:rw,nosuid,size=1g --network none \
+  --read-only --tmpfs /tmp:rw,exec,nosuid,size=1g --network none \
   --mount type=bind,src=/absolute/path/to/data,dst=/data,readonly \
   --mount type=bind,src=/absolute/path/to/weights,dst=/weights,readonly \
   --mount type=bind,src="$PWD/runs",dst=/runs \
