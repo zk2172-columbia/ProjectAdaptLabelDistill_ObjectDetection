@@ -42,20 +42,7 @@ This runs **SAM3 adaptation → pseudo-labeling → YOLO training → evaluation
 
 For Docker, CPU setup and moving the runtime to another machine, see [portable environments](docs/ENVIRONMENT.md). For separate stage commands and advanced settings, see [installation and usage](docs/SETUP.md).
 
-## Evaluation and validation
-
-Use the [evaluation protocol](pipeline/EVALUATION.md) for comparable metrics.
-
-The repository has passed 47 regression tests and a bounded GPU Adapt → Label → Distill smoke test on RTX 4090. These checks validate execution, not full reproduction of paper results. See the [one-command Docker validation](docs/ONE_COMMAND_VALIDATION.md) and [earlier GPU acceptance](docs/GPU_ACCEPTANCE_20261120.md) for details and limitations.
-
-After installation, run:
-
-```bash
-python -m unittest discover -s tests -v
-python scripts/smoke_pipeline.py --output /tmp/ald-smoke-01
-```
-
-Use a fresh output directory. This CPU smoke test uses generated images and cached synthetic teacher detections.
+For metric definitions and evaluation settings, see the [evaluation protocol](pipeline/EVALUATION.md).
 
 ## Citation
 
