@@ -24,6 +24,9 @@ COPY scripts/ ./scripts/
 COPY tests/ ./tests/
 COPY LICENSES/ ./LICENSES/
 COPY THIRD_PARTY_NOTICES.md README.md ./
+# Host checkouts may use a private umask. Runtime users need read/traverse, not write.
+RUN chmod -R a+rX /opt/ald \
+    && git config --system --add safe.directory /opt/ald/SAM3
 # Run with --user "$(id -u):$(id -g)" so bind-mounted outputs belong to the caller.
 USER 10001:10001
 ENTRYPOINT ["python", "scripts/run_ald.py"]
