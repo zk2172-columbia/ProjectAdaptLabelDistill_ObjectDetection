@@ -58,8 +58,27 @@ python scripts/smoke_pipeline.py --output /tmp/ald-smoke-01
 
 Use a fresh output directory. This CPU smoke test uses generated images and cached synthetic teacher detections.
 
-## Acknowledgments and license
+## Citation
+
+If you use ALD in your research, please cite our paper. The BibTeX below is a **placeholder**: the title follows the current manuscript; authors and publication details will be finalized before release.
+
+```bibtex
+@misc{ald,
+  title  = {Adapt, Label, Distill: Adapting {SAM3} as an Offline Teacher for Compact Object Detection},
+  author = {TODO: confirmed author list},
+  year   = {TODO},
+  note   = {TODO: publication or preprint details},
+  url    = {TODO}
+}
+```
+
+## License
+
+> [!NOTE]
+> **Project license: TBD.** A license for the original ALD code will be added before public release. This placeholder does not grant a license.
+
+Third-party components retain their respective licenses; see [Third-party notices](THIRD_PARTY_NOTICES.md) and [license texts](LICENSES/). Dataset and model-weight access remains subject to the respective providers' terms.
+
+## Acknowledgments
 
 ALD builds on [SAM3](https://github.com/facebookresearch/sam3) and [Ultralytics YOLO](https://github.com/ultralytics/ultralytics). Source provenance is documented in the [integration notes](docs/PRIVATE_INTEGRATION.md).
-
-Third-party components retain their respective licenses; see [Third-party notices](THIRD_PARTY_NOTICES.md). The license for original project code must be finalized before public release. Dataset and model-weight access remains subject to the respective providers' terms.
