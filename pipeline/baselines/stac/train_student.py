@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+# ALD contributors: modified extensions; distribution notice dated 2026-11-23.
+# See THIRD_PARTY_NOTICES.md for provenance and modification scope.
 """train_student.py — STAC stage 3: train the student on labeled + pseudo-labeled data.
 
     "Apply strong data augmentations to unlabeled images ... compute unsupervised loss and

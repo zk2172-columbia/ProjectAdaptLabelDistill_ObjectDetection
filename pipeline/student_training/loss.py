@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+# ALD contributors: modified extensions; distribution notice dated 2026-11-23.
+# See THIRD_PARTY_NOTICES.md for provenance and modification scope.
 """Phase2DetectionLoss / Phase2DetectionModel — the weighted student training loss.
 
 Two weight sources, selected per arm by loc_weight_src / cls_weight_src:

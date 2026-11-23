@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+# ALD contributors: modified extensions; distribution notice dated 2026-11-23.
+# See THIRD_PARTY_NOTICES.md for provenance and modification scope.
 """data.py — how STAC data reaches the model: the weighted dataset, and the balanced loader.
 
   STACDataset      a YOLODataset that stamps one constant w_image on every sample it emits

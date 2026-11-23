@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+# ALD contributors: modified extensions; distribution notice dated 2026-11-23.
+# See THIRD_PARTY_NOTICES.md for provenance and modification scope.
 """utils.py — the only shared helpers baselines/stac needs.
 
 Copied (not imported) from pseudo_labeling/utils.py and student_training/utils.py so this directory has no

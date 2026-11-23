@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+# ALD contributors: modified extensions; distribution notice dated 2026-11-23.
+# See THIRD_PARTY_NOTICES.md for provenance and modification scope.
 """pseudolabels.py — STAC stages 1 and 2: run the teacher, then threshold what it produced.
 
 Two stages behind one `--stage` argument, so run_stac.py still launches each in its own

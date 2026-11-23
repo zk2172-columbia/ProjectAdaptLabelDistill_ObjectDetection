@@ -46,7 +46,7 @@ For metric definitions and evaluation settings, see the [evaluation protocol](pi
 
 ## Citation
 
-If you use ALD in your research, please cite our paper. The BibTeX below is a **placeholder**: the title follows the current manuscript; authors and publication details will be finalized before release.
+If you use ALD in your research, please cite our paper. The BibTeX below is a **placeholder**: the title follows the current manuscript; authors and publication details are not yet recorded in this repository. Do not use this unfinished entry as a final citation.
 
 ```bibtex
 @misc{ald,
@@ -60,8 +60,7 @@ If you use ALD in your research, please cite our paper. The BibTeX below is a **
 
 ## License
 
-> [!NOTE]
-> **Project license: TBD.** A license for the original ALD code will be added before public release. This placeholder does not grant a license.
+Original ALD code is available under the [MIT License](LICENSE). This is a **mixed-license repository**: the student-training and STAC directories remain under AGPL-3.0, and the SAM3 patch and derived configuration templates remain under the SAM License. See the [license scope and third-party notices](THIRD_PARTY_NOTICES.md) before redistribution or deployment.
 
 Third-party components retain their respective licenses; see [Third-party notices](THIRD_PARTY_NOTICES.md) and [license texts](LICENSES/). Dataset and model-weight access remains subject to the respective providers' terms.
 

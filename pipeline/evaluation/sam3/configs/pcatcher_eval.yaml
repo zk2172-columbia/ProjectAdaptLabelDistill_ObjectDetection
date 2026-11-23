@@ -1,4 +1,7 @@
 # @package _global_
+# Derived from Meta SAM3 configuration templates; distributed under the SAM License.
+# ALD contributors: adapted training/evaluation configuration; notice dated 2026-11-23.
+# See LICENSES/SAM-LICENSE.txt and THIRD_PARTY_NOTICES.md.
 # pcatcher_eval.yaml — SAM3 teacher scored on the held-out split, canonical version.
 #
 # This is the single source of truth for the config run_eval.py launches. It is NOT run directly

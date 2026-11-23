@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+# ALD contributors: modified extensions; distribution notice dated 2026-11-23.
+# See THIRD_PARTY_NOTICES.md for provenance and modification scope.
 """loss.py — STACDetectionLoss: v8DetectionLoss with STAC's lambda_u on the unsupervised half.
 
 The paper's objective (STAC eq. 4):
